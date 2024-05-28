@@ -11,3 +11,8 @@ jobs:
 
       - run: wasm-pack build
       - run: wasm-pack pack .
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phtherichthys
+          path: phtherichthys*.tgz
