@@ -12,10 +12,13 @@ jobs:
       - run: wasm-pack build
       - run: wasm-pack pack
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-          registry-url: 'https://npm.pkg.github.com'
+      - run: npm set '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}'
+        working-directory: pkg
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: npm set registry=https://npm.pkg.github.com
+        working-directory: pkg
+
       - run: npm publish
         working-directory: pkg
         env:
