@@ -18,6 +18,8 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: npm set @phtheirichthys:registry=https://npm.pkg.github.com
         working-directory: pkg
+      - run: npm pkg set name=phtheirichthys@phtheirichthys
+        working-directory: pkg
 
       - run: npm publish
         working-directory: pkg
