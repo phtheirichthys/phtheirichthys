@@ -16,7 +16,7 @@ jobs:
         working-directory: pkg
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: npm set registry=https://npm.pkg.github.com
+      - run: npm set @phtheirichthys:registry=https://npm.pkg.github.com
         working-directory: pkg
 
       - run: npm publish
