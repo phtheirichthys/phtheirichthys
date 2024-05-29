@@ -16,6 +16,7 @@ jobs:
         with:
           node-version: '20.x'
           registry-url: 'https://npm.pkg.github.com'
-      - run: wasm-pack publish
+      - run: npm publish
+        working-directory: pkg
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
