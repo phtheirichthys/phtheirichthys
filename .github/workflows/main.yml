@@ -10,6 +10,8 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - run: wasm-pack build
+      - run: npm pkg set name=phtheirichthys@phtheirichthys
+        working-directory: pkg
       - run: wasm-pack pack
 
       - run: npm set '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}'
@@ -17,8 +19,6 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: npm set @phtheirichthys:registry=https://npm.pkg.github.com
-        working-directory: pkg
-      - run: npm pkg set name=phtheirichthys@phtheirichthys
         working-directory: pkg
 
       - run: npm publish
