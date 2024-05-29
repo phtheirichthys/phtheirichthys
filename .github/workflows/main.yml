@@ -10,17 +10,6 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - run: wasm-pack build
-      - run: wasm-pack pack .
-      
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-          registry-url: 'https://npm.pkg.github.com'
-
-      - run: npm ci
-        working-directory: ./pkg
-        
-      - run: npm publish
-        working-directory: ./pkg
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: wasm-pack pack
+      - run: npm set "//npm.pkg.github.com/:_authToken=$GITHUB_TOKEN"
+      - run: wasm-pack publish
