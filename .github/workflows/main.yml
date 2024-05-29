@@ -12,4 +12,5 @@ jobs:
       - run: wasm-pack build
       - run: wasm-pack pack
       - run: npm set "//npm.pkg.github.com/:_authToken=$GITHUB_TOKEN"
+      - run: npm set registry=https://npm.pkg.github.com
       - run: wasm-pack publish
