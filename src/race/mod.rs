@@ -1,11 +1,13 @@
 use chrono::{DateTime, Utc};
 use log::info;
 use serde::{Serialize, Deserialize};
+use tsify::Tsify;
 use crate::algorithm::Algorithm;
 use crate::algorithm::spherical::Spherical;
-use crate::position::Point;
+use crate::position::Coords;
 
-#[derive(Clone, Deserialize, Serialize, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Race {
     pub(crate) race_id: RaceId,
     #[serde(default)]
@@ -17,44 +19,49 @@ pub(crate) struct Race {
     #[serde(default)]
     pub(crate) stamina: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[tsify(type = "Date")]
     pub(crate) start_time: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[tsify(type = "Date")]
     pub(crate) end_time: Option<DateTime<Utc>>,
-    pub(crate) start: Point,
+    pub(crate) start: Coords,
     pub(crate) waypoints: Vec<Waypoint>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ice_limits: Option<Limits>,
 }
 
-#[derive(Clone, Deserialize, Serialize, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct RaceId {
     pub(crate) id: u16,
     pub(crate) leg: Option<u8>,
 }
 
 
-#[derive(Clone, Deserialize, Serialize, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Limits {
-    pub(crate) north: Vec<Point>,
-    pub(crate) south: Vec<Point>,
+    pub(crate) north: Vec<Coords>,
+    pub(crate) south: Vec<Coords>,
     #[serde(rename = "maxLat")]
     pub(crate) max_lat: f64,
     #[serde(rename = "minLat")]
     pub(crate) min_lat: f64,
 }
 
-#[derive(Clone, Deserialize, Serialize, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Waypoint {
     pub(crate) name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) group: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) radius: Option<u8>,
-    pub(crate) latlons: Vec<Point>,
+    pub(crate) latlons: Vec<Coords>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) departure: Option<Point>,
+    pub(crate) departure: Option<Coords>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) destination: Option<Point>,
+    pub(crate) destination: Option<Coords>,
     #[serde(rename = "toAvoid", skip_serializing_if = "Option::is_none")]
     pub(crate) to_avoid: Option<Vec<([f64;2], [f64;2], [f64;2])>>,
     #[serde(default)]
@@ -62,7 +69,7 @@ pub(crate) struct Waypoint {
 }
 
 impl Waypoint {
-    pub(crate) fn crossed(&self, from: &Point, to: &Point, heading: f64) -> bool {
+    pub(crate) fn crossed(&self, from: &Coords, to: &Coords, heading: f64) -> bool {
         let algorithm = Spherical{};
 
         if self.latlons.len() > 1 {

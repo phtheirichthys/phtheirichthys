@@ -1,4 +1,4 @@
-use crate::position::Point;
+use crate::position::Coords;
 use crate::utils::{Distance, DistanceUnit};
 
 pub(crate) mod spherical;
@@ -9,15 +9,15 @@ const MEAN_EARTH_RADIUS: Distance = Distance {
 };
 
 pub(crate) trait Algorithm {
-    fn distance_to(&self, from: &Point, to: &Point) -> Distance;
+    fn distance_to(&self, from: &Coords, to: &Coords) -> Distance;
 
-    fn heading_to(&self, from: &Point, to: &Point) -> f64;
+    fn heading_to(&self, from: &Coords, to: &Coords) -> f64;
 
-    fn distance_and_heading_to(&self, from: &Point, to: &Point) -> (Distance, f64);
+    fn distance_and_heading_to(&self, from: &Coords, to: &Coords) -> (Distance, f64);
 
-    fn destination(&self, from : &Point, heading: f64, distance: &Distance) -> Point;
+    fn destination(&self, from : &Coords, heading: f64, distance: &Distance) -> Coords;
 
-    fn intersection(&self, line: (&Point, &Point), from: &Point, heading: f64) -> Option<Point>;
+    fn intersection(&self, line: (&Coords, &Coords), from: &Coords, heading: f64) -> Option<Coords>;
 }
 
 trait Utils {

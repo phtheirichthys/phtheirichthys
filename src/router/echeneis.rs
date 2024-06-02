@@ -17,7 +17,7 @@ use crate::algorithm::Algorithm;
 use crate::algorithm::spherical::Spherical;
 use crate::phtheirichthys::BoatOptions;
 use crate::land::LandsProvider;
-use crate::position::{Heading, Penalties, Point, Sail, Settings, Status};
+use crate::position::{Heading, Penalties, Coords, Sail, Settings, Status};
 use crate::router::{IsochroneSection, Router, RouteInfos, RouteRequest, RouteResult, WaypointStatus, Wind, Isochrone, IsochronePoint};
 use crate::utils::{Distance, Speed};
 use crate::wind::Provider;
@@ -364,7 +364,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         }
     }
 
-    pub(crate) fn jump2(algorithm: &Arc<A>, lands_provider: Option<&Arc<Box<dyn LandsProvider + Send + Sync>>>, polar: &Arc<Polar>, boat_options: &Arc<BoatOptions>, start: &Arc<Point>, from: &Arc<Position>, to: &Option<Arc<Buoy>>, heading: &Heading, duration: Duration, wind: &Wind, factor: f64) -> Vec<(i32, Position)> {
+    pub(crate) fn jump2(algorithm: &Arc<A>, lands_provider: Option<&Arc<Box<dyn LandsProvider + Send + Sync>>>, polar: &Arc<Polar>, boat_options: &Arc<BoatOptions>, start: &Arc<Coords>, from: &Arc<Position>, to: &Option<Arc<Buoy>>, heading: &Heading, duration: Duration, wind: &Wind, factor: f64) -> Vec<(i32, Position)> {
         let twa = heading.twa(wind.direction);
         // if twa.abs() < 30.0 || twa.abs() > 160.0 {
         //     return Vec::new()
@@ -433,7 +433,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         }).filter(|alt| alt.is_some()).map(|alt| alt.unwrap()).collect()
     }
 
-    fn buoy_reached(algorithm: &Arc<A>, polar: &Arc<Polar>, boat_options: &Arc<BoatOptions>, start: &Arc<Point>, from: &Arc<Position>, to: &Arc<Buoy>, duration: Duration, wind: &Wind, factor: f64) -> Option<(i32, Position)> {
+    fn buoy_reached(algorithm: &Arc<A>, polar: &Arc<Polar>, boat_options: &Arc<BoatOptions>, start: &Arc<Coords>, from: &Arc<Position>, to: &Arc<Buoy>, duration: Duration, wind: &Wind, factor: f64) -> Option<(i32, Position)> {
 
         if from.dist_to > from.distance.clone() * 10.0 {
             return None;
@@ -504,7 +504,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         results.into_iter().next()
     }
 
-    fn way2(algorithm: Arc<A>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, polar: Arc<Polar>, boat_options: Arc<BoatOptions>, start: Arc<Point>, from: Arc<Position>, to: &Option<Arc<Buoy>>, duration: Duration, wind: &Wind, factor: f64) -> Vec<Nav> {
+    fn way2(algorithm: Arc<A>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, polar: Arc<Polar>, boat_options: Arc<BoatOptions>, start: Arc<Coords>, from: Arc<Position>, to: &Option<Arc<Buoy>>, duration: Duration, wind: &Wind, factor: f64) -> Vec<Nav> {
 
         if to.is_some() {
             let to = to.as_ref().unwrap();
@@ -554,7 +554,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         navs
     }
 
-    async fn navigate2(&self, boat_options: &Arc<BoatOptions>, start: &Point, now: &DateTime<Utc>, from: Nav, to: &mut Buoy, duration: Duration, factor: f64, max: &mut HashMap<i32, [Distance;8]>, max_radius: &Distance, navs: VecDeque<Nav>) -> VecDeque<Nav> {
+    async fn navigate2(&self, boat_options: &Arc<BoatOptions>, start: &Coords, now: &DateTime<Utc>, from: Nav, to: &mut Buoy, duration: Duration, factor: f64, max: &mut HashMap<i32, [Distance;8]>, max_radius: &Distance, navs: VecDeque<Nav>) -> VecDeque<Nav> {
 
         let navs = Arc::new(Mutex::new(navs.into_iter().map(|nav| (nav.absolute_duration, nav)).collect::<HashMap<Duration, Nav>>()));
 
@@ -795,7 +795,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         navs.into()
     }
 
-    fn get_factor(&self, from: &Point, to: &Buoy) -> f64 {
+    fn get_factor(&self, from: &Coords, to: &Buoy) -> f64 {
         let dist = to.distance(from);
         let polar_result = self.polar.get_boat_speed(&Heading::TWA(90.0), &Wind { direction: 0.0 ,speed: Speed::from_kts(10.0) }, Some(&Sail::from_index(0)), &Sail::from_index(0), false);
         let dist_between_points = polar_result.speed.km_h() * 3.0 * 1000.0;
@@ -1055,7 +1055,7 @@ impl From<RouteRequest> for Alternative {
 #[derive(Clone)]
 pub(crate) struct Position {
     pub(crate) az: i32,
-    pub(crate) point: Point,
+    pub(crate) point: Coords,
     pub(crate) from_dist: Distance,
     pub(crate) dist_to: Distance,
     pub(crate) duration: NavDuration,
@@ -1183,7 +1183,7 @@ impl From<RouteRequest> for Position {
 }
 
 
-fn get_buoys(race: &Race, boat: Point) -> impl Iterator<Item = Buoy> {
+fn get_buoys(race: &Race, boat: Coords) -> impl Iterator<Item = Buoy> {
     let w = race.waypoints.clone();
     w.into_iter().filter(|w| !w.validated)
         .map(move |w| Buoy::from(w, boat.clone()))
@@ -1198,7 +1198,7 @@ pub(crate) enum Buoy {
 
 impl Buoy {
 
-    fn from(w: race::Waypoint, boat: Point) -> Self {
+    fn from(w: race::Waypoint, boat: Coords) -> Self {
         if w.latlons.len() == 1 {
             if w.radius.is_none() {
                 Buoy::Waypoint(Waypoint {
@@ -1257,7 +1257,7 @@ impl Buoy {
         }
     }
 
-    fn departure(&self) -> Point {
+    fn departure(&self) -> Coords {
         match self {
             Buoy::Door(door) => {
                 door.departure.clone()
@@ -1267,7 +1267,7 @@ impl Buoy {
         }
     }
 
-    fn destination(&self) -> Point {
+    fn destination(&self) -> Coords {
         match self {
             Buoy::Door(door) => { door.destination.clone() }
             Buoy::Waypoint(waypoint) => { waypoint.destination.clone() }
@@ -1283,7 +1283,7 @@ impl Buoy {
         }
     }
 
-    fn is_to_avoid(&self, point: &Point) -> bool {
+    fn is_to_avoid(&self, point: &Coords) -> bool {
         let to_avoids = match self {
             Buoy::Door(door) => { &door.to_avoid }
             Buoy::Waypoint(waypoint) => { &waypoint.to_avoid }
@@ -1310,7 +1310,7 @@ impl Buoy {
         false
     }
 
-    fn distance(&self, to: &Point) -> Distance {
+    fn distance(&self, to: &Coords) -> Distance {
         match self {
             Buoy::Door(door) => {
                 Spherical{}.distance_to(&door.destination, to)
@@ -1324,7 +1324,7 @@ impl Buoy {
         }
     }
 
-    fn _distance_and_heading_to(&self, to: &Point) -> (Distance, f64) {
+    fn _distance_and_heading_to(&self, to: &Coords) -> (Distance, f64) {
         match self {
             Buoy::Door(door) => {
                 Spherical{}.distance_and_heading_to(&door.destination, to)
@@ -1536,32 +1536,32 @@ impl Buoy {
 #[derive(Clone)]
 struct Door {
     name: String,
-    destination: Point,
-    departure: Point,
-    to_avoid: Vec<(Point, Point, Point)>,
-    tribord: Point,
-    babord: Point,
+    destination: Coords,
+    departure: Coords,
+    to_avoid: Vec<(Coords, Coords, Coords)>,
+    tribord: Coords,
+    babord: Coords,
     reachers: Vec<Nav>,
 }
 
 #[derive(Clone)]
 struct Waypoint {
     name: String,
-    destination: Point,
-    to_avoid: Vec<(Point, Point, Point)>,
+    destination: Coords,
+    to_avoid: Vec<(Coords, Coords, Coords)>,
 }
 
 #[derive(Clone)]
 struct Zone {
     name: String,
-    destination: Point,
-    to_avoid: Vec<(Point, Point, Point)>,
+    destination: Coords,
+    to_avoid: Vec<(Coords, Coords, Coords)>,
     radius: Distance,
     reachers: Vec<Nav>,
 }
 
 impl Zone {
-    fn is_in(&self, pos: &Point) -> bool {
+    fn is_in(&self, pos: &Coords) -> bool {
         Spherical{}.distance_to(&self.destination, pos) <= self.radius
     }
 }

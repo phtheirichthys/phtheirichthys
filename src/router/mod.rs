@@ -7,7 +7,7 @@ use chrono::{DateTime, Duration, Utc};
 use chrono_humanize::HumanTime;
 use serde::{Serialize, Serializer, Deserialize};
 use crate::phtheirichthys::BoatOptions;
-use crate::position::{Heading, Penalties, Point, Settings, Status};
+use crate::position::{Heading, Penalties, Coords, Settings, Status};
 use crate::wind::Wind;
 use crate::{position, race::Race};
 use crate::utils::{Speed};
@@ -22,7 +22,7 @@ pub(crate) trait Router {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct RouteRequest {
-  pub(crate) from: Point,
+  pub(crate) from: Coords,
   pub(crate) start_time: DateTime<Utc>,
   pub(crate) boat_settings: Settings,
   pub(crate) status: Status,
@@ -63,7 +63,7 @@ pub(crate) struct RouteResult {
 
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct Waypoint {
-  pub(crate) from: Point,
+  pub(crate) from: Coords,
   #[serde(serialize_with = "duration_to_seconds")]
   pub(crate) duration: Duration,
   #[serde(serialize_with = "duration_to_seconds")]

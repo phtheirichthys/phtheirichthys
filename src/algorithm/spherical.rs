@@ -1,13 +1,13 @@
 use std::f64::consts;
 use std::f64::consts::PI;
 use crate::algorithm::{Algorithm, Distance, MEAN_EARTH_RADIUS, Utils};
-use crate::position::Point;
+use crate::position::Coords;
 
 pub(crate) struct Spherical {
 }
 
 impl Algorithm for Spherical {
-    fn distance_to(&self, from: &Point, to: &Point) -> Distance {
+    fn distance_to(&self, from: &Coords, to: &Coords) -> Distance {
         let φ1 = from.lat.to_radians();
         let φ2 = to.lat.to_radians();
         let δφ = φ2 - φ1;
@@ -35,7 +35,7 @@ impl Algorithm for Spherical {
         return d
     }
 
-    fn heading_to(&self, from: &Point, to: &Point) -> f64 {
+    fn heading_to(&self, from: &Coords, to: &Coords) -> f64 {
         let φ1 = from.lat.to_radians();
         let φ2 = to.lat.to_radians();
 
@@ -58,7 +58,7 @@ impl Algorithm for Spherical {
         return b.wrap360()
     }
 
-    fn distance_and_heading_to(&self, from: &Point, to: &Point) -> (Distance, f64) {
+    fn distance_and_heading_to(&self, from: &Coords, to: &Coords) -> (Distance, f64) {
         let φ1 = from.lat.to_radians();
         let φ2 = to.lat.to_radians();
         let δφ = φ2 - φ1;
@@ -91,7 +91,7 @@ impl Algorithm for Spherical {
         return (d, b.wrap360())
     }
 
-    fn destination(&self, from: &Point, heading: f64, distance: &Distance) -> Point {
+    fn destination(&self, from: &Coords, heading: f64, distance: &Distance) -> Coords {
         let φ1 = from.lat.to_radians();
         let λ1 = from.lon.to_radians();
         let θ = heading.to_radians();
@@ -119,13 +119,13 @@ impl Algorithm for Spherical {
         let δλ = δ * θ.sin() / q;
         let λ2 = λ1 + δλ;
 
-        Point {
+        Coords {
             lat: φ2.to_degrees(),
             lon: λ2.to_degrees(),
         }
     }
 
-    fn intersection(&self, line: (&Point, &Point), p2: &Point, brng2: f64) -> Option<Point> {
+    fn intersection(&self, line: (&Coords, &Coords), p2: &Coords, brng2: f64) -> Option<Coords> {
 
         // see www.edwilliams.org/avform.htm#Intersection
 
@@ -170,7 +170,7 @@ impl Algorithm for Spherical {
         let δλ13 = (θ13.sin()*δ13.sin()*φ1.cos()).atan2(δ13.cos() - φ1.sin()*φ3.sin());
         let λ3 = λ1 + δλ13;
 
-        Some(Point {
+        Some(Coords {
             lat: φ3.to_degrees(),
             lon: λ3.to_degrees()
         })

@@ -14,7 +14,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use log::{error, Level};
 use once_cell::sync::Lazy;
 use phtheirichthys::Phtheirichthys;
-use position::Point;
+use position::Coords;
 use wasm_bindgen::prelude::*;
 use web_sys::js_sys;
 use wind::{providers::{config::ProviderConfig, Providers}, ProviderStatus, Wind};

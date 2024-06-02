@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, fmt::{Display, Formatter}};
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
 
-use crate::{position::Point, utils::Speed};
+use crate::{position::Coords, utils::Speed};
 
 pub mod providers;
 mod stamp;
@@ -32,7 +32,7 @@ type RefTime = DateTime<Utc>;
 type ForecastTime = DateTime<Utc>;
 
 pub(crate) trait InstantWind {
-    fn interpolate(&self, point: &Point) -> Wind;
+    fn interpolate(&self, point: &Coords) -> Wind;
 }
 
 pub(crate) fn vector_to_degrees(u: f64, v: f64) -> f64 {

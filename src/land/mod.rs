@@ -1,6 +1,6 @@
 use log::debug;
 
-use crate::position::Point;
+use crate::position::Coords;
 
 pub(crate) mod vr;
 
@@ -22,7 +22,7 @@ pub(crate) trait LandsProvider {
         return false
     }
 
-    fn cross_land(&self, from: &Point, to: &Point) -> bool {
+    fn cross_land(&self, from: &Coords, to: &Coords) -> bool {
 
         const STEP: i8 = 10;
 
@@ -37,7 +37,7 @@ pub(crate) trait LandsProvider {
         false
     }
 
-    fn cross_next_land(&self, from: &Point, to: &Point) -> bool {
+    fn cross_next_land(&self, from: &Coords, to: &Coords) -> bool {
 
         let next = self.is_next_land(from.lat, from.lon);
 
@@ -54,7 +54,7 @@ pub(crate) trait LandsProvider {
         false
     }
 
-    fn best_to_leave(&self, from: &Point) -> f64 {
+    fn best_to_leave(&self, from: &Coords) -> f64 {
 
         let deltas = [(1.0, 0.0), (1.0, 1.0), (0.0, 1.0), (-1.0, 1.0), (-1.0, 0.0), (-1.0, -1.0), (0.0, -1.0), (1.0, -1.0)];
         let headings = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0];

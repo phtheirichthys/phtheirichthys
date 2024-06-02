@@ -5,8 +5,10 @@ use chrono::{DateTime, Duration, Utc};
 use chrono::serde::ts_seconds;
 use log::error;
 use serde::{Deserialize, Serialize};
+use tsify::Tsify;
+use wasm_bindgen::prelude::*;
 
-use crate::{polar::{Polar, Polars, PolarsSpec}, position::{Heading, Penalties, Point, Settings, Status}, router::{echeneis::{Echeneis, NavDuration, Position}, RouteRequest}, utils::Distance, wind::{providers::{config::ProviderConfig, ProviderResultSpec as _, Providers}, ProviderStatus, Wind}};
+use crate::{polar::{Polar, Polars, PolarsSpec}, position::{Heading, Penalties, Coords, Settings, Status}, router::{echeneis::{Echeneis, NavDuration, Position}, RouteRequest}, utils::Distance, wind::{providers::{config::ProviderConfig, ProviderResultSpec as _, Providers}, ProviderStatus, Wind}};
 
 pub struct Phtheirichthys {
     providers: Providers,
@@ -34,7 +36,7 @@ impl Phtheirichthys {
         self.providers.get_status(provider)
     }
 
-    pub(crate) fn get_wind(&self, provider: String, m: DateTime<Utc>, point: Point) -> anyhow::Result<Wind> {
+    pub(crate) fn get_wind(&self, provider: String, m: DateTime<Utc>, point: Coords) -> anyhow::Result<Wind> {
         self.providers.get_wind(provider, m, point)
     }
 
@@ -44,7 +46,7 @@ impl Phtheirichthys {
         polars.insert(name, Arc::new(polar));
     }
 
-    pub(crate) fn eval_snake(&self, route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<Vec<(i64, Point)>> {
+    pub(crate) fn eval_snake(&self, route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<Vec<(i64, Coords)>> {
         let wind_provider = self.providers.get(params.wind_provider)?;
         let start = Arc::new(route_request.from.clone());
         let polar = self.polars.get(&params.polar)?;
@@ -109,13 +111,20 @@ pub(crate) struct SnakeParams {
     boat_options: BoatOptions,
 }
 
-#[derive(Serialize, Deserialize)]
-pub(crate) struct BoatOptions {
-    pub(crate) lt: bool,
-    pub(crate) gt: bool,
-    pub(crate) code0: bool,
-    pub(crate) foil: bool,
-    pub(crate) hull: bool,
-    pub(crate) winch: bool,
-    pub(crate) stamina: bool,
+#[derive(Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct BoatOptions {
+    pub lt: bool,
+    pub gt: bool,
+    pub code0: bool,
+    pub foil: bool,
+    pub hull: bool,
+    pub winch: bool,
+    pub stamina: bool,
+}
+
+impl BoatOptions {
+    pub fn new() -> Self {
+        Self { lt: false, gt: false, code0: false, foil: false, hull: false, winch: false, stamina: false }
+    }
 }

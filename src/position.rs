@@ -1,41 +1,43 @@
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use std::ops::{Sub};
+use std::ops::Sub;
 use chrono::Duration;
 use serde::{Serialize, Deserialize, Serializer, de, Deserializer};
 use serde::de::Visitor;
+use tsify::Tsify;
+use wasm_bindgen::prelude::*;
 use crate::polar::Vmgs;
 use crate::router;
-use crate::utils::{Speed};
+use crate::utils::Speed;
 use crate::wind::Wind;
 
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct Point {
+#[derive(Clone, Default, Debug, Serialize, Tsify, Deserialize, PartialEq)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub(crate) struct Coords {
     pub(crate) lat: f64,
     pub(crate) lon: f64,
 }
 
-impl From<(f64, f64)> for Point {
+impl From<(f64, f64)> for Coords {
     fn from(latlon: (f64, f64)) -> Self {
-        Point {
+        Coords {
             lat: latlon.0,
             lon: latlon.1,
         }
     }
 }
 
-impl From<[f64; 2]> for Point {
+impl From<[f64; 2]> for Coords {
     fn from(latlon: [f64; 2]) -> Self {
-        Point {
+        Coords {
             lat: latlon[0],
             lon: latlon[1],
         }
     }
 }
 
-impl Display for Point {
+impl Display for Coords {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}, {})", self.lat, self.lon)
     }
@@ -54,8 +56,9 @@ impl PartialEq<Settings> for Settings {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Sail {
     pub(crate) index: usize,
     pub(crate) id: usize,
@@ -63,7 +66,7 @@ pub(crate) struct Sail {
 }
 
 impl Sail {
-    pub(crate) const AUTO: Sail = Sail {
+    pub const AUTO: Sail = Sail {
         index: 0,
         id: 1,
         auto: true
@@ -106,7 +109,6 @@ impl Into<usize> for Sail {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct Status {
-    #[serde(default)]
     pub(crate) aground: bool,
     pub(crate) boat_speed: Speed,
     pub(crate) wind: Wind,
@@ -355,8 +357,9 @@ fn seconds_to_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
     deserializer.deserialize_i64(DurationVisitor)
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
 #[serde(rename_all = "lowercase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) enum Heading {
     HEADING(f64),
     TWA(f64),

@@ -1,6 +1,6 @@
 [package]
 name = "phtheirichthys"
-version = "0.1.35"
+version = "0.1.38"
 authors = ["Arnaud Bouts <arnaud.bouts@orange.com>"]
 edition = "2018"
 
@@ -26,6 +26,7 @@ once_cell = "1.19.0"
 reqwest = { version = "0.12", features = ["json"] }
 serde = { version = "1.0.202", features = ["derive"] }
 serde-wasm-bindgen = "0.6.5"
+tsify = { version = "0.4.5", default = false, features = ['js'] }
 wasm-bindgen = "0.2.92"
 wasm-bindgen-futures = "0.4.42"
 

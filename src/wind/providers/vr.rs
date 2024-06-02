@@ -14,7 +14,7 @@ use reqwest::Url;
 use serde::Deserialize;
 
 use crate::wind::{ForecastTime, ProviderStatus, RefTime};
-use crate::{position::Point, utils::Speed, wind::{vector_to_degrees, InstantWind, Provider, Wind}};
+use crate::{position::Coords, utils::Speed, wind::{vector_to_degrees, InstantWind, Provider, Wind}};
 
 #[derive(Debug)]
 pub(crate) struct VrWindProvider {
@@ -225,7 +225,7 @@ impl VrInstantWind {
         (u, v)
     }
 
-    fn interpolate_from_data(data: &Box<[[(f64,f64);360];181]>, pos: &Point) -> (f64, f64) {
+    fn interpolate_from_data(data: &Box<[[(f64,f64);360];181]>, pos: &Coords) -> (f64, f64) {
 
         let lat_0 = -90.0;
         let lon_0 = -180.0;
@@ -254,7 +254,7 @@ impl VrInstantWind {
         return Self::bilinear_interpolate(j - fj as f64, i - fi as f64, (u00, v00), (u10, v10), (u01, v01), (u11, v11))
     }
 
-    fn interpolate(reference: &Reference, pos: &Point) -> (f64, f64) {
+    fn interpolate(reference: &Reference, pos: &Coords) -> (f64, f64) {
 
         let data = reference.data.lock().unwrap();
 
@@ -267,7 +267,7 @@ impl VrInstantWind {
         Self::interpolate_from_data(data, pos)
     }
 
-    fn mid_interpolate(old: &Reference, new: Option<&Reference>, pos: &Point, h_ref: f64) -> (f64, f64) {
+    fn mid_interpolate(old: &Reference, new: Option<&Reference>, pos: &Coords, h_ref: f64) -> (f64, f64) {
 
         match new {
             None => {
@@ -292,7 +292,7 @@ impl VrInstantWind {
 }
 
 impl InstantWind for VrInstantWind {
-    fn interpolate(&self, pos: &Point) -> Wind {
+    fn interpolate(&self, pos: &Coords) -> Wind {
         let (mut u, mut v) = Self::mid_interpolate(&self.w1.iter().last().unwrap(), None, pos, self.h);
 
         if let Some(w2) = &self.w2 {

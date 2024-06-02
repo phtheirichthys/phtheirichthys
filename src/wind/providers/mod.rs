@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use log::{debug, error, info};
 
-use crate::position::Point;
+use crate::position::Coords;
 
 use self::config::ProviderConfig;
 
@@ -76,7 +76,7 @@ impl Providers {
         }
     }
 
-    pub(crate) fn get_wind(&self, provider: String, m: DateTime<Utc>, point: Point) -> Result<Wind> {
+    pub(crate) fn get_wind(&self, provider: String, m: DateTime<Utc>, point: Coords) -> Result<Wind> {
         debug!("Get wind {provider} {m} {point}");
 
         let providers: std::sync::RwLockReadGuard<HashMap<String, Arc<dyn Provider + Sync + Send>>> = self.providers.read().unwrap();
