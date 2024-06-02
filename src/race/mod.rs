@@ -1,3 +1,7 @@
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
+
+use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use log::info;
 use serde::{Serialize, Deserialize};
@@ -6,9 +10,47 @@ use crate::algorithm::Algorithm;
 use crate::algorithm::spherical::Spherical;
 use crate::position::Coords;
 
+pub(crate) type Races = Arc<RwLock<HashMap<String, Race>>>;
+
+pub(crate) trait RacesSpec {
+    fn new() -> Self;
+
+    fn list(&self) -> Vec<Race>;
+
+    fn get(&self, name: &String) -> Result<Race>;
+
+    fn set(&self, name: String, race: Race);
+}
+
+impl RacesSpec for Races {
+    fn new() -> Self {
+        Arc::new(RwLock::new(HashMap::new()))
+    }
+
+    fn list(&self) -> Vec<Race> {
+        let races = self.read().unwrap();
+        races.iter().map(|(_, r)| r.clone()).collect::<Vec<_>>()
+    }
+
+    fn get(&self, name: &String) -> Result<Race> {
+        let races = self.read().unwrap();
+        match races.get(name) {
+            Some(race) => Ok(race.clone()),
+            None => bail!("Race {name} not found"),
+        }
+    }
+    
+    fn set(&self, name: String, race: Race) {
+        let mut races = self.write().unwrap();
+        races.insert(name, race);
+    }
+
+    
+}
+
 #[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub(crate) struct Race {
+pub struct Race {
     pub(crate) race_id: RaceId,
     #[serde(default)]
     pub(crate) archived: bool,

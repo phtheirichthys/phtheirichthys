@@ -10,13 +10,18 @@ mod router;
 mod utils;
 pub mod wind;
 
+use std::sync::Arc;
+
 use chrono::{DateTime, TimeZone, Utc};
 use log::{error, Level};
 use once_cell::sync::Lazy;
 use phtheirichthys::Phtheirichthys;
 use position::Coords;
+use race::Race;
+use serde::{Deserialize, Serialize};
+use tsify::{declare, Tsify};
 use wasm_bindgen::prelude::*;
-use web_sys::js_sys;
+use web_sys::js_sys::{self, Array};
 use wind::{providers::{config::ProviderConfig, Providers}, ProviderStatus, Wind};
 
 use crate::{position::Heading, router::RouteRequest};
@@ -75,4 +80,31 @@ pub fn add_polar(name: String, polar: JsValue) -> Result<(), JsValue> {
     PHTHEIRICHTHYS.read().unwrap().add_polar(name, polar);
 
     Ok(())
+}
+
+#[derive(Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi)]
+pub struct VecRaces {
+    #[tsify(type = "[Race, ...Race[]]")]
+    pub vec: Vec<Race>,
+}
+
+#[wasm_bindgen]
+pub fn list_races() -> VecRaces {
+    VecRaces {
+        vec: PHTHEIRICHTHYS.read().unwrap().list_races()
+    }
+}
+
+#[wasm_bindgen]
+pub fn get_race(name: String) -> Result<Race, JsValue> {
+    match PHTHEIRICHTHYS.read().unwrap().get_race(name) {
+        Ok(race) => Ok(race),
+        Err(e) => Err(js_sys::Error::new(&e.to_string()))?,
+    }
+}
+
+#[wasm_bindgen]
+pub fn set_race(name: String, race: Race) {
+    PHTHEIRICHTHYS.read().unwrap().set_race(name, race)
 }

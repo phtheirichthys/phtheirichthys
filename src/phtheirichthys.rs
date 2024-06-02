@@ -8,11 +8,13 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 
+use crate::race::{Race, Races, RacesSpec};
 use crate::{polar::{Polar, Polars, PolarsSpec}, position::{Heading, Penalties, Coords, Settings, Status}, router::{echeneis::{Echeneis, NavDuration, Position}, RouteRequest}, utils::Distance, wind::{providers::{config::ProviderConfig, ProviderResultSpec as _, Providers}, ProviderStatus, Wind}};
 
 pub struct Phtheirichthys {
     providers: Providers,
     polars: Polars,
+    races: Races,
 }
 
 impl Phtheirichthys {
@@ -21,6 +23,7 @@ impl Phtheirichthys {
         Phtheirichthys {
             providers: Providers::new(),
             polars: <Polars as PolarsSpec>::new(),
+            races: <Races as RacesSpec>::new(),
         }
     }
 
@@ -44,6 +47,18 @@ impl Phtheirichthys {
         let mut polars = self.polars.write().unwrap();
 
         polars.insert(name, Arc::new(polar));
+    }
+
+    pub(crate) fn list_races(&self) -> Vec<Race> {
+        self.races.list()
+    }
+
+    pub(crate) fn get_race(&self, name: String) -> Result<Race> {
+        self.races.get(&name)
+    }
+
+    pub(crate) fn set_race(&self, name: String, race: Race) {
+        self.races.set(name, race)
     }
 
     pub(crate) fn eval_snake(&self, route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<Vec<(i64, Coords)>> {
