@@ -12,8 +12,8 @@ pub mod wind;
 
 use std::sync::Arc;
 
-use chrono::{DateTime, TimeZone, Utc};
-use log::{error, Level};
+use chrono::{TimeZone, Utc};
+use log::Level;
 use once_cell::sync::Lazy;
 use phtheirichthys::Phtheirichthys;
 use position::Coords;
@@ -24,7 +24,6 @@ use wasm_bindgen::prelude::*;
 use web_sys::js_sys::{self, Array};
 use wind::{providers::{config::ProviderConfig, Providers}, ProviderStatus, Wind};
 
-use crate::{position::Heading, router::RouteRequest};
 //use wind::providers::{config::{NoaaProviderConfig, ProviderConfig}, storage::StorageConfig, Providers, ProvidersSpec};
 
 // static PHTHEIRICHTHYS: std::sync::RwLock<Option<Phtheirichthys>> = std::sync::RwLock::new(None);

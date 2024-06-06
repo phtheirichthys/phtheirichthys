@@ -96,7 +96,7 @@ impl VrLandProvider {
     const LON_0: i32 = -180;
     const LON_N: i32 = 360;
 
-    pub(crate) fn new(tiles_dir: &String) -> Result<Self> {
+    pub(crate) fn _new(tiles_dir: &String) -> Result<Self> {
 
         let index = match std::fs::read(PathBuf::from(tiles_dir).join("index")) {
             Ok(index) => index,

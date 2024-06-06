@@ -9,6 +9,7 @@ use tsify::Tsify;
 use crate::algorithm::Algorithm;
 use crate::algorithm::spherical::Spherical;
 use crate::position::Coords;
+use crate::utils::Distance;
 
 pub(crate) type Races = Arc<RwLock<HashMap<String, Race>>>;
 
@@ -50,11 +51,10 @@ impl RacesSpec for Races {
 
 #[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct Race {
-    pub(crate) race_id: RaceId,
-    #[serde(default)]
-    pub(crate) archived: bool,
+pub(crate) struct Race {
+    pub(crate) id: String,
     pub(crate) name: String,
+    pub(crate) leg: u8,
     #[serde(rename = "shortName", skip_serializing_if = "Option::is_none")]
     pub(crate) short_name: Option<String>,
     pub(crate) boat: String,
@@ -67,18 +67,10 @@ pub struct Race {
     #[tsify(type = "Date")]
     pub(crate) end_time: Option<DateTime<Utc>>,
     pub(crate) start: Coords,
-    pub(crate) waypoints: Vec<Waypoint>,
+    pub(crate) buoys: Vec<Buoy>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ice_limits: Option<Limits>,
 }
-
-#[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub(crate) struct RaceId {
-    pub(crate) id: u16,
-    pub(crate) leg: Option<u8>,
-}
-
 
 #[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -93,70 +85,78 @@ pub(crate) struct Limits {
 
 #[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub(crate) struct Waypoint {
-    pub(crate) name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) group: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) radius: Option<u8>,
-    pub(crate) latlons: Vec<Coords>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) departure: Option<Coords>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) destination: Option<Coords>,
-    #[serde(rename = "toAvoid", skip_serializing_if = "Option::is_none")]
-    pub(crate) to_avoid: Option<Vec<([f64;2], [f64;2], [f64;2])>>,
-    #[serde(default)]
-    pub(crate) validated: bool,
+pub(crate) enum Buoy {
+    Zone(Zone),
+    Door(Door),
+    Waypoint(Waypoint),
 }
 
-impl Waypoint {
-    pub(crate) fn crossed(&self, from: &Coords, to: &Coords, heading: f64) -> bool {
-        let algorithm = Spherical{};
-
-        if self.latlons.len() > 1 {
-            let babord = &self.latlons[0];
-            let tribord = &self.latlons[1];
-
-
-            let t = algorithm.heading_to(babord, tribord);
-            let a = algorithm.heading_to(from, babord);
-
-            let alpha = 180.0 + a - t;
-
-            let b = algorithm.heading_to(from, tribord);
-            let beta = b - t;
-
-            if b < t
-                && (a < b && heading > a && heading < b
-                || a > b && (heading > a || heading < b)) {
-
-                let a2 = algorithm.heading_to(to, babord);
-                let mut alpha2 = 180.0 + a2 - t;
-                if a2 > 180.0 {
-                    alpha2 = alpha2 - 360.0
-                }
-                let b2 = algorithm.heading_to(to, tribord);
-                let beta2 = b2 - t;
-
-                return alpha*alpha2 < 0.0 && beta*beta2 < 0.0;
-            }
-
+impl Buoy {
+    pub(crate) fn is_validated(&self) -> bool {
+        match self {
+            Buoy::Zone(circle) => circle.validated,
+            Buoy::Door(door) => door.validated,
+            Buoy::Waypoint(waypoint) => waypoint.validated,
         }
+    }
 
-        false
+    fn validate(&mut self) {
+        match self {
+            Buoy::Zone(circle) => circle.validated = true,
+            Buoy::Door(door) => door.validated = true,
+            Buoy::Waypoint(waypoint) => waypoint.validated = true,
+        } 
     }
 }
 
-impl Race {
-    pub(crate) fn next_waypoint(&self) -> Option<&Waypoint> {
+#[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub(crate) struct Door {
+    pub(crate) name: String,
+    pub(crate) port: Coords,
+    pub(crate) starboard: Coords,
+    pub(crate) departure: Coords,
+    pub(crate) destination: Coords,
+    pub(crate) to_avoid: Vec<(Coords, Coords, Coords)>,
+    pub(crate) validated: bool,
+}
 
-        self.waypoints.iter().filter(|w| !w.validated).collect::<Vec<&Waypoint>>().first().map(|w| w.clone())
+#[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub(crate) struct Zone {
+    pub(crate) name: String,
+    pub(crate) destination: Coords,
+    #[tsify(type = "number")]
+    pub(crate) radius: Distance,
+    pub(crate) to_avoid: Vec<(Coords, Coords, Coords)>,
+    pub(crate) validated: bool,
+}
+
+impl Zone {
+    pub(crate) fn is_in(&self, pos: &Coords) -> bool {
+        Spherical{}.distance_to(&self.destination, pos) <= self.radius
+    }
+}
+
+
+#[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub(crate) struct Waypoint {
+    pub(crate) name: String,
+    pub(crate) destination: Coords,
+    pub(crate) to_avoid: Vec<(Coords, Coords, Coords)>,
+    pub(crate) validated: bool,
+}
+
+impl Race {
+    pub(crate) fn next_waypoint(&self) -> Option<Buoy> {
+
+        self.buoys.iter().filter(|w| !w.is_validated()).collect::<Vec<_>>().first().map(|w| w.clone().to_owned())
     }
 
     pub(crate) fn validate_next_waypoint(&mut self) {
 
         info!("Validate next waypoint");
-        self.waypoints.iter_mut().filter(|w| !w.validated).collect::<Vec<&mut Waypoint>>().first_mut().map(|w| w.validated = true);
+        self.buoys.iter_mut().filter(|w| !w.is_validated()).collect::<Vec<&mut Buoy>>().first_mut().map(|w| w.validate());
     }
 }

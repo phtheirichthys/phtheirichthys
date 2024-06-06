@@ -2,7 +2,6 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use chrono::{DateTime, Duration, Utc};
-use chrono::serde::ts_seconds;
 use log::error;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -92,7 +91,7 @@ impl Phtheirichthys {
         let mut wind = winds.interpolate(&src.point);
         let t = Heading::TWA(heading.twa(wind.direction).round());
 
-        while (duration < Duration::hours(params.max_duration)) {
+        while duration < Duration::hours(params.max_duration) {
             let jump = Echeneis::<_>::jump2(
                 &std::sync::Arc::new(crate::algorithm::spherical::Spherical{}),
                 None,

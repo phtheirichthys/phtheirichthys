@@ -347,3 +347,39 @@ impl ops::Div<Speed> for Distance {
         }
     }
 }
+
+
+impl Serialize for Distance {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_f64(self.nm())
+    }
+}
+
+struct DistanceVisitor;
+
+impl<'de> Visitor<'de> for DistanceVisitor {
+    type Value = Distance;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("an integer between -2^31 and 2^31")
+    }
+
+    fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+    {
+        Ok(Distance::from_nm(value))
+    }
+}
+
+impl<'de> Deserialize<'de> for Distance {
+    fn deserialize<D>(deserializer: D) -> Result<Distance, D::Error>
+        where
+            D: Deserializer<'de>,
+    {
+        deserializer.deserialize_f64(DistanceVisitor)
+    }
+}

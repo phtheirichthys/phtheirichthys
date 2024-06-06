@@ -66,7 +66,7 @@ pub(crate) struct Sail {
 }
 
 impl Sail {
-    pub const AUTO: Sail = Sail {
+    pub const _AUTO: Sail = Sail {
         index: 0,
         id: 1,
         auto: true

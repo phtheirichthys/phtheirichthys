@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::fmt::{Debug, Display, Formatter};
 use std::io::Cursor;
@@ -13,7 +12,7 @@ use log::{debug, error};
 use reqwest::Url;
 use serde::Deserialize;
 
-use crate::wind::{ForecastTime, ProviderStatus, RefTime};
+use crate::wind::ProviderStatus;
 use crate::{position::Coords, utils::Speed, wind::{vector_to_degrees, InstantWind, Provider, Wind}};
 
 #[derive(Debug)]

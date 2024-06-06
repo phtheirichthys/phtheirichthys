@@ -8,7 +8,7 @@ use crate::position::Coords;
 
 use self::config::ProviderConfig;
 
-use super::{InstantWind, Provider, ProviderStatus, Wind};
+use super::{Provider, ProviderStatus, Wind};
 
 pub(crate) mod config;
 mod storage;

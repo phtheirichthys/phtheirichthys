@@ -17,16 +17,16 @@ impl Storage for LocalStorage {
             Ok(handle) => {
                 web_sys::FileSystemDirectoryHandle::from(handle)
             }
-            Err(e) => {
+            Err(_e) => {
                 bail!("Fail getting root directory handler")
             }
         };
 
-        let handle = match wasm_bindgen_futures::JsFuture::from(handle.get_file_handle_with_options(&name, FileSystemGetFileOptions::new().create(true))).await {
+        let _handle = match wasm_bindgen_futures::JsFuture::from(handle.get_file_handle_with_options(&name, FileSystemGetFileOptions::new().create(true))).await {
             Ok(handle) => {
                 web_sys::FileSystemFileHandle::from(handle)
             }
-            Err(e) => {
+            Err(_e) => {
                 bail!("Fail getting file handler")
             }
         };
@@ -36,11 +36,11 @@ impl Storage for LocalStorage {
         Ok(())
     }
 
-    async fn remove(&self, name: String) -> anyhow::Result<()> {
+    async fn remove(&self, _name: String) -> anyhow::Result<()> {
         todo!()
     }
 
-    async fn exists(&self, name: String) -> anyhow::Result<bool> {
+    async fn exists(&self, _name: String) -> anyhow::Result<bool> {
         
         Ok(false)
     }

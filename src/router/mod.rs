@@ -10,7 +10,7 @@ use crate::phtheirichthys::BoatOptions;
 use crate::position::{Heading, Penalties, Coords, Settings, Status};
 use crate::wind::Wind;
 use crate::{position, race::Race};
-use crate::utils::{Speed};
+use crate::utils::Speed;
 
 // pub(crate) mod phtheirichthys;
 pub(crate) mod echeneis;

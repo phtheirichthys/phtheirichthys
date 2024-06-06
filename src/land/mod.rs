@@ -22,7 +22,7 @@ pub(crate) trait LandsProvider {
         return false
     }
 
-    fn cross_land(&self, from: &Coords, to: &Coords) -> bool {
+    fn _cross_land(&self, from: &Coords, to: &Coords) -> bool {
 
         const STEP: i8 = 10;
 
@@ -54,7 +54,7 @@ pub(crate) trait LandsProvider {
         false
     }
 
-    fn best_to_leave(&self, from: &Coords) -> f64 {
+    fn _best_to_leave(&self, from: &Coords) -> f64 {
 
         let deltas = [(1.0, 0.0), (1.0, 1.0), (0.0, 1.0), (-1.0, 1.0), (-1.0, 0.0), (-1.0, -1.0), (0.0, -1.0), (1.0, -1.0)];
         let headings = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0];

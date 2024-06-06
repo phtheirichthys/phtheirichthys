@@ -9,7 +9,6 @@ use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use chrono_humanize::{Accuracy, Tense, HumanTime};
 use log::{debug, error, info};
-use serde::Serialize;
 use crate::race;
 // use rayon::prelude::*;
 use crate::{polar::Polar, race::Race, router};
@@ -191,7 +190,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
                     }
 
                     // Is boat arrived
-                    if nav.crossed && destination.is_end() {
+                    if nav.crossed && buoys.peek().is_none() {
                         // TODO : arrived
                         // Search for better route (cross line / cross circle)
                         reached = true
@@ -598,7 +597,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
                                     // remove all navs later than current
                                     navs.retain(|d, _| d <= &way_nav.absolute_duration);
 
-                                    let mut nav = navs.entry(way_nav.absolute_duration).or_insert(Nav::from(way_nav.absolute_duration));
+                                    let nav = navs.entry(way_nav.absolute_duration).or_insert(Nav::from(way_nav.absolute_duration));
 
                                     if !nav.reached_by_way {
                                         nav.alternatives.clear();
@@ -615,7 +614,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
 
                                     let mut navs = navs.lock().unwrap();
 
-                                    let mut nav = navs.entry(way_nav.absolute_duration).or_insert(Nav::from(way_nav.absolute_duration));
+                                    let nav = navs.entry(way_nav.absolute_duration).or_insert(Nav::from(way_nav.absolute_duration));
 
                                     if !nav.reached_by_way {
 
@@ -1184,110 +1183,57 @@ impl From<RouteRequest> for Position {
 
 
 fn get_buoys(race: &Race, boat: Coords) -> impl Iterator<Item = Buoy> {
-    let w = race.waypoints.clone();
-    w.into_iter().filter(|w| !w.validated)
+    let w = race.buoys.clone();
+    w.into_iter().filter(|w| !w.is_validated())
         .map(move |w| Buoy::from(w, boat.clone()))
 }
 
 #[derive(Clone)]
-pub(crate) enum Buoy {
-    Door(Door),
-    Waypoint(Waypoint),
-    Zone(Zone),
+pub(crate) struct Buoy {
+    inner: race::Buoy,
+    reachers: Vec<Nav>,
 }
 
 impl Buoy {
 
-    fn from(w: race::Waypoint, boat: Coords) -> Self {
-        if w.latlons.len() == 1 {
-            if w.radius.is_none() {
-                Buoy::Waypoint(Waypoint {
-                    name: w.name,
-                    destination: w.latlons.into_iter().nth(0).unwrap(),
-                    to_avoid: w.to_avoid.unwrap_or_default().into_iter().map(|(a, b, c)| (a.into(), b.into(), c.into())).collect(),
-                })
-            } else {
-                Buoy::Zone(Zone {
-                    name: w.name,
-                    destination: w.latlons.into_iter().nth(0).unwrap().into(),
-                    to_avoid: w.to_avoid.unwrap_or_default().into_iter().map(|(a, b, c)| (a.into(), b.into(), c.into())).collect(),
-                    radius: Distance::from_nm(w.radius.unwrap() as f64),
-                    reachers: vec![]
-                })
-            }
-        } else {
-            let mut latlons = w.latlons.into_iter();
-            let babord = latlons.nth(0).unwrap();
-            let tribord = latlons.nth(0).unwrap();
-
-            let spher = Spherical{};
-            let (d, t) = spher.distance_and_heading_to(&babord, &tribord);
-            let d = Distance::from_m((d.clone() * d / 2.0).m().sqrt());
-
-            let mut a = t - 45.0;
-            if a < 0.0 {
-                a += 360.0;
-            }
-            let destination = w.destination.unwrap_or(spher.destination(&babord, a, &d));
-
-            let mut a = t + 45.0;
-            if a > 360.0 {
-                a -= 360.0;
-            }
-            let departure = {
-                let departure = w.departure.unwrap_or(spher.destination(&babord, a, &d));
-                if false && (Spherical{}.distance_to(&tribord, &boat) + Spherical{}.distance_to(&boat, &babord)) < (Spherical{}.distance_to(&tribord, &departure) + Spherical{}.distance_to(&departure, &babord)) {
-                    boat
-                } else {
-                    departure
-                }
-            };
-
-            debug!("Buoy {} - departure {:?} destination {:?}", w.name, departure, destination);
-
-            Buoy::Door(Door {
-                name: w.name,
-                destination,
-                departure,
-                to_avoid: w.to_avoid.unwrap_or_default().into_iter().map(|(a, b, c)| (a.into(), b.into(), c.into())).collect(),
-                babord,
-                tribord,
-                reachers: vec![]
-            })
+    fn from(buoy: race::Buoy, _boat: Coords) -> Self {
+        Self {
+            inner: buoy,
+            reachers: Vec::new(),
         }
     }
 
     fn departure(&self) -> Coords {
-        match self {
-            Buoy::Door(door) => {
+        match &self.inner {
+            race::Buoy::Door(door) => {
                 door.departure.clone()
             }
-            Buoy::Waypoint(waypoint) => { waypoint.destination.clone() }
-            Buoy::Zone(zone) => { zone.destination.clone() }
+            race::Buoy::Waypoint(waypoint) => { waypoint.destination.clone() }
+            race::Buoy::Zone(zone) => { zone.destination.clone() }
         }
     }
 
     fn destination(&self) -> Coords {
-        match self {
-            Buoy::Door(door) => { door.destination.clone() }
-            Buoy::Waypoint(waypoint) => { waypoint.destination.clone() }
-            Buoy::Zone(zone) => { zone.destination.clone() }
+        match &self.inner {
+            race::Buoy::Door(door) => { door.destination.clone() }
+            race::Buoy::Waypoint(waypoint) => { waypoint.destination.clone() }
+            race::Buoy::Zone(zone) => { zone.destination.clone() }
         }
     }
 
     fn name(&self) -> &String {
-        match self {
-            Buoy::Door(door) => { &door.name }
-            Buoy::Waypoint(waypoint) => { &waypoint.name }
-            Buoy::Zone(zone) => { &zone.name }
+        match &self.inner {
+            race::Buoy::Door(door) => { &door.name }
+            race::Buoy::Waypoint(waypoint) => { &waypoint.name }
+            race::Buoy::Zone(zone) => { &zone.name }
         }
     }
 
     fn is_to_avoid(&self, point: &Coords) -> bool {
-        let to_avoids = match self {
-            Buoy::Door(door) => { &door.to_avoid }
-            Buoy::Waypoint(waypoint) => { &waypoint.to_avoid }
-            Buoy::Zone(zone) => { &zone.to_avoid }
+        let to_avoids = match &self.inner {
+            race::Buoy::Door(door) => { &door.to_avoid }
+            race::Buoy::Waypoint(waypoint) => { &waypoint.to_avoid }
+            race::Buoy::Zone(zone) => { &zone.to_avoid }
         };
 
         for t in to_avoids {
@@ -1311,28 +1257,28 @@ impl Buoy {
     }
 
     fn distance(&self, to: &Coords) -> Distance {
-        match self {
-            Buoy::Door(door) => {
+        match &self.inner {
+            race::Buoy::Door(door) => {
                 Spherical{}.distance_to(&door.destination, to)
             }
-            Buoy::Waypoint(waypoint) => {
+            race::Buoy::Waypoint(waypoint) => {
                 Spherical{}.distance_to(&waypoint.destination, to)
             }
-            Buoy::Zone(zone) => {
+            race::Buoy::Zone(zone) => {
                 Spherical{}.distance_to(&zone.destination, to) - &zone.radius
             }
         }
     }
 
     fn _distance_and_heading_to(&self, to: &Coords) -> (Distance, f64) {
-        match self {
-            Buoy::Door(door) => {
+        match &self.inner {
+            race::Buoy::Door(door) => {
                 Spherical{}.distance_and_heading_to(&door.destination, to)
             }
-            Buoy::Waypoint(waypoint) => {
+            race::Buoy::Waypoint(waypoint) => {
                 Spherical{}.distance_and_heading_to(&waypoint.destination, to)
             }
-            Buoy::Zone(zone) => {
+            race::Buoy::Zone(zone) => {
                 let (distance, heading) = Spherical{}.distance_and_heading_to(&zone.destination, to);
                 (distance - &zone.radius, heading)
             }
@@ -1341,15 +1287,15 @@ impl Buoy {
 
     fn crossed(&self, pos: &Position) -> bool {
         let algorithm = Spherical{};
-        match self {
-            Buoy::Door(door) => {
+        match &self.inner {
+            race::Buoy::Door(door) => {
                 if let Some(src) = &pos.previous {
-                    let t = algorithm.heading_to(&door.babord, &door.tribord);
-                    let a = algorithm.heading_to(&src.point, &door.babord);
+                    let t = algorithm.heading_to(&door.port, &door.starboard);
+                    let a = algorithm.heading_to(&src.point, &door.port);
 
                     let alpha = 180.0 + a - t;
 
-                    let b = algorithm.heading_to(&src.point, &door.tribord);
+                    let b = algorithm.heading_to(&src.point, &door.starboard);
                     let beta = b - t;
 
                     let heading = pos.settings.heading.heading(pos.status.wind.direction);
@@ -1358,12 +1304,12 @@ impl Buoy {
                         && (a < b && heading > a && heading < b
                             || a > b && (heading > a || heading < b)) {
 
-                        let a2 = algorithm.heading_to(&pos.point, &door.babord);
+                        let a2 = algorithm.heading_to(&pos.point, &door.port);
                         let mut alpha2 = 180.0 + a2 - t;
                         if a2 > 180.0 {
                             alpha2 = alpha2 - 360.0
                         }
-                        let b2 = algorithm.heading_to(&pos.point, &door.tribord);
+                        let b2 = algorithm.heading_to(&pos.point, &door.starboard);
                         let beta2 = b2 - t;
 
                         return alpha*alpha2 < 0.0 && beta*beta2 < 0.0;
@@ -1372,7 +1318,7 @@ impl Buoy {
 
                 false
             },
-            Buoy::Zone(zone) => {
+            race::Buoy::Zone(zone) => {
                 if let Some(src) = &pos.previous {
                     !zone.is_in(&src.point) && zone.is_in(&pos.point)
                 } else {
@@ -1387,15 +1333,12 @@ impl Buoy {
 
         let (dist, az) = Spherical{}.distance_and_heading_to(&self.departure(), &pos.point);
 
-        let reachers = match self {
-            Buoy::Waypoint(_) => {
+        let reachers = match self.inner {
+            race::Buoy::Waypoint(_) => {
                 return;
             }
-            Buoy::Door(door) => {
-                &mut door.reachers
-            }
-            Buoy::Zone(zone) => {
-                &mut zone.reachers
+            _ => {
+                &mut self.reachers
             }
         };
 
@@ -1443,125 +1386,31 @@ impl Buoy {
     }
 
     fn reachers(&self) -> Vec<Nav> {
-        match self {
-            Buoy::Door(door) => door.reachers.clone(),
-            Buoy::Waypoint(_) => Vec::new(),
-            Buoy::Zone(zone) => zone.reachers.clone(),
-        }
+        self.reachers.clone()
     }
 
     fn is_waypoint(&self) -> bool {
-        match self {
-            Buoy::Door(_) => false,
-            Buoy::Waypoint(_) => true,
-            Buoy::Zone(_) => false,
+        match self.inner {
+            race::Buoy::Door(_) => false,
+            race::Buoy::Waypoint(_) => true,
+            race::Buoy::Zone(_) => false,
         }
     }
 
     fn is_zone(&self) -> bool {
-        match self {
-            Buoy::Door(_) => false,
-            Buoy::Waypoint(_) => false,
-            Buoy::Zone(_) => true
+        match self.inner {
+            race::Buoy::Door(_) => false,
+            race::Buoy::Waypoint(_) => false,
+            race::Buoy::Zone(_) => true
         }
     }
 
     fn is_door(&self) -> bool {
-        match self {
-            Buoy::Door(_) => true,
-            Buoy::Waypoint(_) => false,
-            Buoy::Zone(_) => false
+        match self.inner {
+            race::Buoy::Door(_) => true,
+            race::Buoy::Waypoint(_) => false,
+            race::Buoy::Zone(_) => false
         }
     }
-
-    fn is_end(&self) -> bool {
-        self.name() == &"end".to_string()
-    }
 }
 
-/*impl From<race::Waypoint> for Buoy {
-    fn from(w: race::Waypoint) -> Self {
-        if w.latlons.len() == 1 {
-            if w.radius.is_none() {
-                Buoy::Waypoint(Waypoint {
-                    name: w.name,
-                    destination: w.latlons.into_iter().nth(0).unwrap(),
-                    to_avoid: w.to_avoid.unwrap_or_default().into_iter().map(|(a, b, c)| (a.into(), b.into(), c.into())).collect(),
-                })
-            } else {
-                Buoy::Zone(Zone {
-                    name: w.name,
-                    destination: w.latlons.into_iter().nth(0).unwrap().into(),
-                    to_avoid: w.to_avoid.unwrap_or_default().into_iter().map(|(a, b, c)| (a.into(), b.into(), c.into())).collect(),
-                    radius: Distance::from_nm(w.radius.unwrap() as f64),
-                    reachers: vec![]
-                })
-            }
-        } else {
-            let mut latlons = w.latlons.into_iter();
-            let babord = latlons.nth(0).unwrap();
-            let tribord = latlons.nth(0).unwrap();
-
-            let spher = Spherical{};
-            let (d, t) = spher.distance_and_heading_to(&babord, &tribord);
-            let d = Distance::from_m((d.clone() * d / 2.0).m().sqrt());
-
-            let mut a = t - 45.0;
-            if a < 0.0 {
-                a += 360.0;
-            }
-            let destination = w.destination.unwrap_or(spher.destination(&babord, a, &d));
-
-            let mut a = t + 45.0;
-            if a > 360.0 {
-                a -= 360.0;
-            }
-            let departure = w.departure.unwrap_or(spher.destination(&babord, a, &d));
-
-            debug!("Buoy {} - departure {:?} destination {:?}", w.name, departure, destination);
-
-            Buoy::Door(Door {
-                name: w.name,
-                destination,
-                departure,
-                to_avoid: w.to_avoid.unwrap_or_default().into_iter().map(|(a, b, c)| (a.into(), b.into(), c.into())).collect(),
-                babord,
-                tribord,
-                reachers: vec![]
-            })
-        }
-    }
-}*/
-
-#[derive(Clone)]
-struct Door {
-    name: String,
-    destination: Coords,
-    departure: Coords,
-    to_avoid: Vec<(Coords, Coords, Coords)>,
-    tribord: Coords,
-    babord: Coords,
-    reachers: Vec<Nav>,
-}
-
-#[derive(Clone)]
-struct Waypoint {
-    name: String,
-    destination: Coords,
-    to_avoid: Vec<(Coords, Coords, Coords)>,
-}
-
-#[derive(Clone)]
-struct Zone {
-    name: String,
-    destination: Coords,
-    to_avoid: Vec<(Coords, Coords, Coords)>,
-    radius: Distance,
-    reachers: Vec<Nav>,
-}
-
-impl Zone {
-    fn is_in(&self, pos: &Coords) -> bool {
-        Spherical{}.distance_to(&self.destination, pos) <= self.radius
-    }
-}
