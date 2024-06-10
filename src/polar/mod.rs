@@ -492,7 +492,7 @@ pub(crate) struct Polar {
     pub(crate) winch: Winch,
     pub(crate) tws: Vec<f64>,
     pub(crate) twa: Vec<f64>,
-    pub(crate) sail: Vec<Sail>,
+    pub(crate) sail: Vec<PolarSail>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Tsify)]
@@ -561,7 +561,7 @@ pub(crate) struct PolarPenalty {
 #[derive(Deserialize, Serialize, Debug, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct Sail {
+pub(crate) struct PolarSail {
     pub(crate) id: usize,
     pub(crate) name: String,
     pub(crate) speed: Vec<Vec<f64>>
