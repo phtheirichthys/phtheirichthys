@@ -9,6 +9,9 @@ jobs:
       - name: Install
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
+      - name: Land
+        run: tar -xzf land.tgz
+
       - run: wasm-pack build
       - run: npm pkg set name=@phtheirichthys/phtheirichthys
         working-directory: pkg
