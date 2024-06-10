@@ -23,7 +23,7 @@ use crate::wind::Provider;
 
 pub(crate) struct Echeneis<A: 'static + Algorithm + Send + Sync> {
     bot_name: String,
-    winds: Arc<Box<dyn Provider + Send + Sync>>,
+    winds: Arc<dyn Provider + Send + Sync>,
     lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>,
     polar: Arc<Polar>,
     algorithm: Arc<A>,
@@ -351,7 +351,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
 impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
 
-    pub(crate) fn new(bot_name: String, polar: Arc<Polar>, winds: Arc<Box<dyn Provider + Send + Sync>>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, algorithm: Arc<A>, config: EcheneisConfig) -> Self {
+    pub(crate) fn new(bot_name: String, polar: Arc<Polar>, winds: Arc<dyn Provider + Send + Sync>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, algorithm: Arc<A>, config: EcheneisConfig) -> Self {
         debug!("[{}] Create new Echeneis Router", bot_name);
         Self {
             bot_name,

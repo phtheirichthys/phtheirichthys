@@ -13,7 +13,7 @@ pub mod wind;
 use std::sync::Arc;
 
 use chrono::{TimeZone, Utc};
-use log::Level;
+use log::{error, Level};
 use once_cell::sync::Lazy;
 use phtheirichthys::Phtheirichthys;
 use position::Coords;
@@ -21,7 +21,7 @@ use race::Race;
 use serde::{Deserialize, Serialize};
 use tsify::{declare, Tsify};
 use wasm_bindgen::prelude::*;
-use web_sys::js_sys::{self, Array};
+use web_sys::{js_sys::{self, Array}, CanvasRenderingContext2d};
 use wind::{providers::{config::ProviderConfig, Providers}, ProviderStatus, Wind};
 
 //use wind::providers::{config::{NoaaProviderConfig, ProviderConfig}, storage::StorageConfig, Providers, ProvidersSpec};
@@ -59,6 +59,23 @@ pub fn get_wind(provider: String, m: js_sys::Date, point: JsValue) -> Result<JsV
         Err(e) => Err(js_sys::Error::new(&e.to_string()))?,
     }
 }
+
+#[wasm_bindgen]
+pub async fn add_land_provider() {
+    PHTHEIRICHTHYS.read().unwrap().add_land_provider().await;
+}
+
+#[wasm_bindgen]
+pub fn draw_land(provider: String, ctx: &CanvasRenderingContext2d, x: f64, y: f64, z: f64, width: usize, height: usize) -> Result<(), JsValue> {
+    match PHTHEIRICHTHYS.read().unwrap().draw_land(provider, ctx, x as i64, y as i64, z as u32, width as usize, height as usize) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            error!("Error drawing land : {:?}", e);
+            Err(js_sys::Error::new(&e.to_string()))?
+        },
+    }
+}
+
 
 #[wasm_bindgen]
 pub fn eval_snake(route_request: JsValue, params: JsValue, heading: JsValue) -> Result<JsValue, JsValue> {

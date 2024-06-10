@@ -3,6 +3,7 @@ use std::sync::{Arc, RwLock};
 use anyhow::{bail, Result};
 use chrono::Duration;
 use serde::{Serialize, Deserialize};
+use tsify::Tsify;
 use crate::phtheirichthys::BoatOptions;
 use crate::position;
 use crate::position::{Heading, Penalties, Penalty};
@@ -474,15 +475,13 @@ pub(crate) struct Vmg {
     pub(crate) vmg: Speed,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Polar {
-    pub(crate) id: Option<String>,
     #[serde(rename = "_id")]
-    pub(crate) polar_id: u8,
-    #[serde(default, skip_serializing)]
-    //pub(crate) archived: bool,
-    //pub(crate) label: String,
+    pub(crate) id: u8,
+    pub(crate) label: String,
     pub(crate) global_speed_ratio: f64,
     pub(crate) ice_speed_ratio: f64,
     pub(crate) auto_sail_change_tolerance: f64,
@@ -496,7 +495,8 @@ pub(crate) struct Polar {
     pub(crate) sail: Vec<Sail>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Foil {
     pub(crate) speed_ratio: f64,
@@ -508,13 +508,15 @@ pub(crate) struct Foil {
     pub(crate) tws_merge: f64,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Hull {
     pub(crate) speed_ratio: f64,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Winch {
     pub(crate) tack: PenaltyCase,
@@ -526,7 +528,8 @@ pub(crate) struct Winch {
     pub(crate) hws: Option<u8>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PenaltyCase {
     pub(crate) std_timer_sec: u16,
@@ -539,21 +542,24 @@ pub(crate) struct PenaltyCase {
     pub(crate) pro: Option<PenaltyBoundaries>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PenaltyBoundaries {
     pub(crate) lw: PolarPenalty,
     pub(crate) hw: PolarPenalty,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PolarPenalty {
     pub(crate) ratio: f64,
     pub(crate) timer: u16
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Sail {
     pub(crate) id: usize,

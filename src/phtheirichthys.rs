@@ -6,12 +6,18 @@ use log::error;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
+use web_sys::CanvasRenderingContext2d;
 
+use crate::{algorithm, land, wind};
+use crate::land::vr::VrLandProvider;
 use crate::race::{Race, Races, RacesSpec};
-use crate::{polar::{Polar, Polars, PolarsSpec}, position::{Heading, Penalties, Coords, Settings, Status}, router::{echeneis::{Echeneis, NavDuration, Position}, RouteRequest}, utils::Distance, wind::{providers::{config::ProviderConfig, ProviderResultSpec as _, Providers}, ProviderStatus, Wind}};
+use crate::router::echeneis::EcheneisConfig;
+use crate::router::{RouteResult, Router};
+use crate::{polar::{Polar, Polars, PolarsSpec}, position::{Heading, Penalties, Coords, Settings, Status}, router::{echeneis::{Echeneis, NavDuration, Position}, RouteRequest}, utils::Distance, wind::{providers::{config::ProviderConfig, ProviderResultSpec as _}, ProviderStatus, Wind}};
 
 pub struct Phtheirichthys {
-    providers: Providers,
+    wind_providers: wind::providers::Providers,
+    land_providers: land::Providers,
     polars: Polars,
     races: Races,
 }
@@ -20,7 +26,8 @@ impl Phtheirichthys {
 
     pub(crate) fn new() -> Self {
         Phtheirichthys {
-            providers: Providers::new(),
+            wind_providers: wind::providers::Providers::new(),
+            land_providers: land::Providers::new(),
             polars: <Polars as PolarsSpec>::new(),
             races: <Races as RacesSpec>::new(),
         }
@@ -28,18 +35,30 @@ impl Phtheirichthys {
 
     pub(crate) async fn add_wind_provider(&self) {
         //self.providers.init_provider(&ProviderConfig::Noaa(NoaaProviderConfig { enabled: true, gribs: StorageConfig::WebSys { prefix: "__".into() } }));
-        match self.providers.init_provider(&ProviderConfig::Vr).await {
+        match self.wind_providers.init_provider(&ProviderConfig::Vr).await {
             Ok(()) => {},
             Err(e) => error!("Failed adding provider : {}", e)
         }
     }
 
     pub(crate) fn get_wind_provider_status(&self, provider: String) -> anyhow::Result<ProviderStatus> {
-        self.providers.get_status(provider)
+        self.wind_providers.get_status(provider)
     }
 
     pub(crate) fn get_wind(&self, provider: String, m: DateTime<Utc>, point: Coords) -> anyhow::Result<Wind> {
-        self.providers.get_wind(provider, m, point)
+        self.wind_providers.get_wind(provider, m, point)
+    }
+
+    pub(crate) async fn add_land_provider(&self) {
+        //self.providers.init_provider(&ProviderConfig::Noaa(NoaaProviderConfig { enabled: true, gribs: StorageConfig::WebSys { prefix: "__".into() } }));
+        match self.land_providers.init_provider(&land::config::ProviderConfig::Vr).await {
+            Ok(()) => {},
+            Err(e) => error!("Failed adding provider : {}", e)
+        }
+    }
+
+    pub(crate) fn draw_land(&self, provider: String, ctx: &CanvasRenderingContext2d, x: i64, y: i64, z: u32, width: usize, height: usize) -> Result<()> {
+        self.land_providers.draw(provider, ctx, x, y, z, width, height)
     }
 
     pub(crate) fn add_polar(&self, name: String, polar: Polar) {
@@ -61,7 +80,7 @@ impl Phtheirichthys {
     }
 
     pub(crate) fn eval_snake(&self, route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<Vec<(i64, Coords)>> {
-        let wind_provider = self.providers.get(params.wind_provider)?;
+        let wind_provider = self.wind_providers.get(params.wind_provider)?;
         let start = Arc::new(route_request.from.clone());
         let polar = self.polars.get(&params.polar)?;
         let boat_options = Arc::new(params.boat_options);
@@ -114,6 +133,20 @@ impl Phtheirichthys {
         }
 
         Ok(result)
+    }
+
+    pub(crate) async fn navigate(&self, wind_provider: String, polar_id: String, race: Race, boat_options: BoatOptions, request: RouteRequest) -> Result<RouteResult> {
+
+        let wind_provider = self.wind_providers.get(wind_provider)?;
+        let polar = self.polars.get(&polar_id)?;
+        let lands_provider = Arc::new(VrLandProvider::new()?);
+        let algorithm = std::sync::Arc::new(crate::algorithm::spherical::Spherical{});
+
+        let router = Echeneis::new("".to_string(), polar, wind_provider, lands_provider, algorithm, EcheneisConfig { accuracy: 1.0, display_all_isochrones: false, timeout: 60 });
+
+        let route_result = router.route(&race, boat_options, request, None).await?;
+
+        Ok(route_result) 
     }
 }
 

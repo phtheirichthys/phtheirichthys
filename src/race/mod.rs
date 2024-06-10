@@ -85,6 +85,7 @@ pub(crate) struct Limits {
 
 #[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
+#[serde(tag = "type")]
 pub(crate) enum Buoy {
     Zone(Zone),
     Door(Door),

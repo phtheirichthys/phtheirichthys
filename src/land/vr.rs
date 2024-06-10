@@ -1,6 +1,11 @@
 use std::path::{Path, PathBuf};
 use anyhow::{bail, Result};
+use rust_embed::Embed;
 use crate::land::LandsProvider;
+
+#[derive(Embed)]
+#[folder = "land"]
+struct Carto;
 
 pub(crate) struct VrLandProvider {
     tiles: Box<[[Tile;360];180]>,
@@ -96,12 +101,12 @@ impl VrLandProvider {
     const LON_0: i32 = -180;
     const LON_N: i32 = 360;
 
-    pub(crate) fn _new(tiles_dir: &String) -> Result<Self> {
+    pub(crate) fn new() -> Result<Box<dyn LandsProvider + Send + Sync>> {
 
-        let index = match std::fs::read(PathBuf::from(tiles_dir).join("index")) {
-            Ok(index) => index,
-            Err(e) => {
-                bail!("Error loading tiles index : {}", e);
+        let index = match Carto::get("index") {
+            Some(index) => index.data,
+            None => {
+                bail!("Tiles index not found");
             }
         };
 
@@ -122,7 +127,7 @@ impl VrLandProvider {
 
                 let tile = match (index[p/4] >> (6 - 2*(p%4))) & 3 {
                     0 => Tile::Sea,
-                    1 => Tile::load(PathBuf::from(tiles_dir).join(&"carto").join(file_name).as_path())?,
+                    1 => Tile::load(&format!("carto/{file_name}"))?,
                     2 => Tile::Land,
                     _ => {
                         bail!("bad value");
@@ -133,9 +138,9 @@ impl VrLandProvider {
             }
         }
 
-        Ok(Self {
+        Ok(Box::new(Self {
             tiles: tiles_array,
-        })
+        }))
     }
 }
 
@@ -148,12 +153,12 @@ enum Tile {
 }
 
 impl Tile {
-    fn load(file_name: &Path) -> Result<Tile> {
+    fn load(file_name: &str) -> Result<Tile> {
 
-        let buf = match std::fs::read(file_name) {
-            Ok(buf) => buf,
-            Err(e) => {
-                bail!("Error loading tile {:?} : {}", file_name, e);
+        let buf = match Carto::get(file_name) {
+            Some(buf) => buf.data.as_ref().to_vec(),
+            None => {
+                bail!("Tile {} not found", file_name);
             }
         };
 
