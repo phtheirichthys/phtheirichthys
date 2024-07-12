@@ -13,15 +13,17 @@ pub mod wind;
 use std::sync::Arc;
 
 use chrono::{TimeZone, Utc};
-use log::{error, Level};
+use log::{debug, error, Level};
 use once_cell::sync::Lazy;
-use phtheirichthys::Phtheirichthys;
-use position::Coords;
+use phtheirichthys::{BoatOptions, Phtheirichthys, SnakeParams, SnakeResult};
+use polar::Polar;
+use position::{Coords, Heading};
 use race::Race;
+use router::RouteRequest;
 use serde::{Deserialize, Serialize};
 use tsify::{declare, Tsify};
 use wasm_bindgen::prelude::*;
-use web_sys::{js_sys::{self, Array}, CanvasRenderingContext2d};
+use web_sys::{js_sys::{self, Array}, OffscreenCanvas};
 use wind::{providers::{config::ProviderConfig, Providers}, ProviderStatus, Wind};
 
 //use wind::providers::{config::{NoaaProviderConfig, ProviderConfig}, storage::StorageConfig, Providers, ProvidersSpec};
@@ -66,8 +68,8 @@ pub async fn add_land_provider() {
 }
 
 #[wasm_bindgen]
-pub fn draw_land(provider: String, ctx: &CanvasRenderingContext2d, x: f64, y: f64, z: f64, width: usize, height: usize) -> Result<(), JsValue> {
-    match PHTHEIRICHTHYS.read().unwrap().draw_land(provider, ctx, x as i64, y as i64, z as u32, width as usize, height as usize) {
+pub fn draw_land(provider: String, canvas: &OffscreenCanvas, x: f64, y: f64, z: f64, width: usize, height: usize) -> Result<(), JsValue> {
+    match PHTHEIRICHTHYS.read().unwrap().draw_land(provider, canvas, x as i64, y as i64, z as u32, width as usize, height as usize) {
         Ok(_) => Ok(()),
         Err(e) => {
             error!("Error drawing land : {:?}", e);
@@ -76,27 +78,33 @@ pub fn draw_land(provider: String, ctx: &CanvasRenderingContext2d, x: f64, y: f6
     }
 }
 
-
 #[wasm_bindgen]
-pub fn eval_snake(route_request: JsValue, params: JsValue, heading: JsValue) -> Result<JsValue, JsValue> {
-    let route_request = serde_wasm_bindgen::from_value(route_request)?;
-    let params = serde_wasm_bindgen::from_value(params)?;
-    let heading = serde_wasm_bindgen::from_value(heading)?;
-
+pub fn eval_snake(route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<SnakeResult, JsValue> {
     match PHTHEIRICHTHYS.read().unwrap().eval_snake(route_request, params, heading) {
-        Ok(positions) => Ok(serde_wasm_bindgen::to_value(&positions)?),
-        Err(e) => Err(js_sys::Error::new(&e.to_string()))?,
+        Ok(res) => Ok(res),
+        Err(e) => {
+            error!("Error evaluating snake : {:?}", e);
+            Err(js_sys::Error::new(&e.to_string()))?
+        },
     }
 }
 
 #[wasm_bindgen]
-pub fn add_polar(name: String, polar: JsValue) -> Result<(), JsValue> {
-    let polar = serde_wasm_bindgen::from_value(polar)?;
-
+pub fn add_polar(name: String, polar: Polar) -> Result<(), JsValue> {
     PHTHEIRICHTHYS.read().unwrap().add_polar(name, polar);
 
     Ok(())
 }
+
+#[wasm_bindgen]
+pub async fn navigate(wind_provider: String, polar_id: String, race: Race, boat_options: BoatOptions, request: RouteRequest) -> Result<(), JsValue> {
+    debug!("navigate");
+    match PHTHEIRICHTHYS.read().unwrap().navigate(wind_provider, polar_id, race, boat_options, request).await {
+        Ok(_) => Ok(()),
+        Err(e) => Err(js_sys::Error::new(&e.to_string()))?,
+    }
+}
+
 
 #[derive(Deserialize, Serialize, Tsify)]
 #[tsify(into_wasm_abi)]

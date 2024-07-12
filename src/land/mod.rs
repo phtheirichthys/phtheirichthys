@@ -1,11 +1,11 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, anyhow, Result};
 use std::{collections::HashMap, f64::consts::PI, ops::Add, sync::{Arc, RwLock}};
 
 use config::ProviderConfig;
 use log::{debug, error, info};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::Clamped;
-use web_sys::{CanvasRenderingContext2d, ImageData};
+use web_sys::{OffscreenCanvas, ImageData};
 
 use crate::position::Coords;
 
@@ -47,8 +47,8 @@ impl Providers {
         Ok(())
     }
 
-    pub(crate) fn draw(&self, provider: String, ctx: &CanvasRenderingContext2d, x: i64, y: i64, z: u32, width: usize, height: usize) -> Result<()> {
-        debug!("Draw land {provider} ({x},{y},{z})");
+    pub(crate) fn draw(&self, provider: String, canvas: &OffscreenCanvas, x: i64, y: i64, z: u32, width: usize, height: usize) -> Result<()> {
+        debug!("Draw land {provider} ({x},{y},{z}) ({width},{height})");
 
         let providers: std::sync::RwLockReadGuard<HashMap<String, Arc<Box<dyn LandsProvider + Sync + Send>>>> = self.providers.read().unwrap();
 
@@ -56,7 +56,7 @@ impl Providers {
             Some(provider) => {
                 debug!("Found provider");
 
-                provider.draw(ctx, x, y, z, width, height)
+                provider.draw(canvas, x, y, z, width, height).map_err(|e| anyhow!("{:?}", e))
             },
             None => {
                 bail!("Provider not found")
@@ -167,7 +167,7 @@ pub(crate) trait LandsProvider {
         false
     }
 
-    fn draw(&self, ctx: &CanvasRenderingContext2d, x: i64, y: i64, z: u32, width: usize, height: usize) -> Result<()> {
+    fn draw(&self, canvas: &OffscreenCanvas, x: i64, y: i64, z: u32, width: usize, height: usize) -> std::result::Result<(), JsValue> {
         let mut data = vec![0u8; width * height * 4];
 
         let bb = tile2boudingbox(x as f64, y as f64, z as f64);
@@ -204,19 +204,9 @@ pub(crate) trait LandsProvider {
                 // }
             }
         }
-        let data = match ImageData::new_with_u8_clamped_array_and_sh(Clamped(&data), width as u32, height as u32) {
-            Ok(data) => data,
-            Err(e) => {
-                bail!("Error creating image from data : {:?}", e);
-            }
-        };
-        match ctx.put_image_data(&data, 0.0, 0.0) {
-            Ok(_) => {},
-            Err(e) => {
-                bail!("Error creating image from canvas context : {:?}", e);
-            }
-        }
-        Ok(())
+        let data = ImageData::new_with_u8_clamped_array_and_sh(Clamped(&data), width as u32, height as u32)?;
+        let ctx = canvas.get_context("2d")?.unwrap().dyn_into::<web_sys::OffscreenCanvasRenderingContext2d>()?;
+        ctx.put_image_data(&data, 0.0, 0.0)
     }
 }
 

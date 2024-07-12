@@ -2,24 +2,31 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use chrono::{DateTime, Duration, Utc};
-use log::error;
+use gloo::timers::callback::Timeout;
+use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
+use web_sys::OffscreenCanvas;
 
 use crate::{algorithm, land, wind};
 use crate::land::vr::VrLandProvider;
 use crate::race::{Race, Races, RacesSpec};
 use crate::router::echeneis::EcheneisConfig;
 use crate::router::{RouteResult, Router};
-use crate::{polar::{Polar, Polars, PolarsSpec}, position::{Heading, Penalties, Coords, Settings, Status}, router::{echeneis::{Echeneis, NavDuration, Position}, RouteRequest}, utils::Distance, wind::{providers::{config::ProviderConfig, ProviderResultSpec as _}, ProviderStatus, Wind}};
+use crate::{polar::{Polar, Polars, PolarsSpec}, position::{Heading, Penalties, Coords, BoatSettings, BoatStatus}, router::{echeneis::{Echeneis, NavDuration, Position}, RouteRequest}, utils::Distance, wind::{providers::{config::ProviderConfig, ProviderResultSpec as _}, ProviderStatus, Wind}};
 
 pub struct Phtheirichthys {
     wind_providers: wind::providers::Providers,
     land_providers: land::Providers,
     polars: Polars,
     races: Races,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct SnakeResult {
+    positions: Vec<(i64, Coords)>
 }
 
 impl Phtheirichthys {
@@ -57,8 +64,8 @@ impl Phtheirichthys {
         }
     }
 
-    pub(crate) fn draw_land(&self, provider: String, ctx: &CanvasRenderingContext2d, x: i64, y: i64, z: u32, width: usize, height: usize) -> Result<()> {
-        self.land_providers.draw(provider, ctx, x, y, z, width, height)
+    pub(crate) fn draw_land(&self, provider: String, canvas: &OffscreenCanvas, x: i64, y: i64, z: u32, width: usize, height: usize) -> Result<()> {
+        self.land_providers.draw(provider, canvas, x, y, z, width, height)
     }
 
     pub(crate) fn add_polar(&self, name: String, polar: Polar) {
@@ -79,7 +86,7 @@ impl Phtheirichthys {
         self.races.set(name, race)
     }
 
-    pub(crate) fn eval_snake(&self, route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<Vec<(i64, Coords)>> {
+    pub(crate) fn eval_snake(&self, route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<SnakeResult> {
         let wind_provider = self.wind_providers.get(params.wind_provider)?;
         let start = Arc::new(route_request.from.clone());
         let polar = self.polars.get(&params.polar)?;
@@ -132,25 +139,35 @@ impl Phtheirichthys {
             wind = winds.interpolate(&src.point);
         }
 
-        Ok(result)
+        Ok(SnakeResult { positions: result })
     }
 
-    pub(crate) async fn navigate(&self, wind_provider: String, polar_id: String, race: Race, boat_options: BoatOptions, request: RouteRequest) -> Result<RouteResult> {
+    pub(crate) async fn navigate(&self, wind_provider: String, polar_id: String, race: Race, boat_options: BoatOptions, request: RouteRequest) -> Result<()> {
 
         let wind_provider = self.wind_providers.get(wind_provider)?;
         let polar = self.polars.get(&polar_id)?;
         let lands_provider = Arc::new(VrLandProvider::new()?);
         let algorithm = std::sync::Arc::new(crate::algorithm::spherical::Spherical{});
 
-        let router = Echeneis::new("".to_string(), polar, wind_provider, lands_provider, algorithm, EcheneisConfig { accuracy: 1.0, display_all_isochrones: false, timeout: 60 });
+        let timeout = Timeout::new(0, move || {
+            wasm_bindgen_futures::spawn_local(async move {
+                let router = Echeneis::new("".to_string(), polar, wind_provider, lands_provider, algorithm, EcheneisConfig { accuracy: 1.0, display_all_isochrones: false, timeout: 60 });
 
-        let route_result = router.route(&race, boat_options, request, None).await?;
+                match router.route(&race, boat_options, request, None).await {
+                    Ok(_) => {},
+                    Err(e) => error!("Navigation failed : {}", e)
+                }
+            });
+        });
 
-        Ok(route_result) 
+        timeout.forget();
+
+        Ok(())
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct SnakeParams {
     max_duration: i64,
     polar: String,

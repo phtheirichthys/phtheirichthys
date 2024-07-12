@@ -61,8 +61,6 @@ impl Providers {
     }
 
     pub(crate) fn get(&self, provider: String) -> ProviderResult {
-        debug!("Get wind provider {provider}");
-
         let providers: std::sync::RwLockReadGuard<HashMap<String, Arc<dyn Provider + Sync + Send>>> = self.providers.read().unwrap();
 
         match providers.get(&provider) {
@@ -77,8 +75,6 @@ impl Providers {
     }
 
     pub(crate) fn get_wind(&self, provider: String, m: DateTime<Utc>, point: Coords) -> Result<Wind> {
-        debug!("Get wind {provider} {m} {point}");
-
         let providers: std::sync::RwLockReadGuard<HashMap<String, Arc<dyn Provider + Sync + Send>>> = self.providers.read().unwrap();
 
         match providers.get(&provider) {

@@ -4,14 +4,16 @@ use std::{fmt, ops};
 use chrono::Duration;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Visitor;
+use tsify::Tsify;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Speed {
     pub(crate) value: f64,
     pub(crate) unit: SpeedUnit,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default)]
 pub(crate) enum SpeedUnit {
     #[default]
     Knot,
@@ -147,6 +149,35 @@ impl<'de> Visitor<'de> for SpeedVisitor {
     {
         Ok(Speed::from_kts(value))
     }
+
+    fn visit_i8<E>(self, value: i8) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Speed::from_kts(value as f64))
+    }
+
+    fn visit_i16<E>(self, value: i16) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Speed::from_kts(value as f64))
+    }
+
+    fn visit_i32<E>(self, value: i32) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Speed::from_kts(value as f64))
+    }
+
+    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Speed::from_kts(value as f64))
+    }
+
 }
 
 impl<'de> Deserialize<'de> for Speed {
@@ -158,15 +189,17 @@ impl<'de> Deserialize<'de> for Speed {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Distance {
     pub(crate) value: f64,
     pub(crate) unit: DistanceUnit,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) enum DistanceUnit {
     Meters,
+    #[default]
     NauticalMiles,
 }
 
@@ -373,6 +406,35 @@ impl<'de> Visitor<'de> for DistanceVisitor {
     {
         Ok(Distance::from_nm(value))
     }
+
+    fn visit_i8<E>(self, value: i8) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Distance::from_nm(value as f64))
+    }
+
+    fn visit_i16<E>(self, value: i16) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Distance::from_nm(value as f64))
+    }
+
+    fn visit_i32<E>(self, value: i32) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Distance::from_nm(value as f64))
+    }
+
+    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Distance::from_nm(value as f64))
+    }
+
 }
 
 impl<'de> Deserialize<'de> for Distance {

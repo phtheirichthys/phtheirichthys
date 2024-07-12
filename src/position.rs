@@ -43,15 +43,16 @@ impl Display for Coords {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct Settings {
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub(crate) struct BoatSettings {
     pub(crate) heading: Heading,
     pub(crate) sail: Sail,
 }
 
-impl PartialEq<Settings> for Settings {
-    fn eq(&self, other: &Settings) -> bool {
+impl PartialEq<BoatSettings> for BoatSettings {
+    fn eq(&self, other: &BoatSettings) -> bool {
         self.sail == other.sail && self.heading == other.heading
     }
 }
@@ -107,9 +108,11 @@ impl Into<usize> for Sail {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct Status {
+#[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub(crate) struct BoatStatus {
     pub(crate) aground: bool,
+    #[tsify(type = "number")]
     pub(crate) boat_speed: Speed,
     pub(crate) wind: Wind,
     pub(crate) foil: u8,
@@ -121,7 +124,8 @@ pub(crate) struct Status {
     pub(crate) stamina: f64,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Penalties {
     pub(crate) gybe: Option<Penalty>,
     pub(crate) sail_change: Option<Penalty>,
@@ -272,7 +276,8 @@ impl Sub<Duration> for Penalties {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Penalty {
     #[serde(serialize_with = "duration_to_seconds", deserialize_with = "seconds_to_duration")]
     pub(crate) duration: Duration,

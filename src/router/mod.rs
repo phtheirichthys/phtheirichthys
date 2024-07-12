@@ -3,11 +3,13 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, Utc, serde::ts_milliseconds};
 use chrono_humanize::HumanTime;
 use serde::{Serialize, Serializer, Deserialize};
+use tsify::Tsify;
+use wasm_bindgen::prelude::*;
 use crate::phtheirichthys::BoatOptions;
-use crate::position::{Heading, Penalties, Coords, Settings, Status};
+use crate::position::{Heading, Penalties, Coords, BoatSettings, BoatStatus};
 use crate::wind::Wind;
 use crate::{position, race::Race};
 use crate::utils::Speed;
@@ -20,24 +22,26 @@ pub(crate) trait Router {
   async fn route(&self, race: &Race, boat_options: BoatOptions, request: RouteRequest, timeout: Option<Duration>) -> Result<RouteResult>;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct RouteRequest {
   pub(crate) from: Coords,
+  #[tsify(type = "Date")]
   pub(crate) start_time: DateTime<Utc>,
-  pub(crate) boat_settings: Settings,
-  pub(crate) status: Status,
+  pub(crate) boat_settings: BoatSettings,
+  pub(crate) status: BoatStatus,
   #[serde(skip, default = "default_steps")]
   pub(crate) steps: Vec<(Duration, Duration)>,
 }
 
 fn default_steps() -> Vec<(Duration, Duration)> {
   vec![
-    (Duration::minutes(30), Duration::minutes(1)),
-    (Duration::hours(1),    Duration::minutes(5)),
-    (Duration::hours(3),    Duration::minutes(10)),
-    (Duration::hours(12),   Duration::minutes(30)),
-    (Duration::hours(24),   Duration::hours(1)),
-    (Duration::hours(144),  Duration::hours(3)),
+    // (Duration::minutes(30), Duration::minutes(1)),
+    // (Duration::hours(1),    Duration::minutes(5)),
+    // (Duration::hours(3),    Duration::minutes(10)),
+    // (Duration::hours(12),   Duration::minutes(30)),
+    // (Duration::hours(24),   Duration::hours(1)),
+    // (Duration::hours(144),  Duration::hours(3)),
     (Duration::hours(9999), Duration::hours(6)),
   ]
 }
@@ -68,7 +72,7 @@ pub(crate) struct Waypoint {
   pub(crate) duration: Duration,
   #[serde(serialize_with = "duration_to_seconds")]
   pub(crate) way_duration: Duration,
-  pub(crate) boat_settings: Settings,
+  pub(crate) boat_settings: BoatSettings,
   pub(crate) status: WaypointStatus,
 }
 
@@ -105,9 +109,9 @@ pub(crate) struct WaypointStatus {
   pub(crate) remaining_stamina: f64,
 }
 
-impl Into<Status> for WaypointStatus {
-  fn into(self) -> Status {
-    Status {
+impl Into<BoatStatus> for WaypointStatus {
+  fn into(self) -> BoatStatus {
+    BoatStatus {
       aground: false,
       boat_speed: self.boat_speed,
       wind: self.wind,

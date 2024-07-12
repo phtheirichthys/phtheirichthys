@@ -16,7 +16,7 @@ use crate::algorithm::Algorithm;
 use crate::algorithm::spherical::Spherical;
 use crate::phtheirichthys::BoatOptions;
 use crate::land::LandsProvider;
-use crate::position::{Heading, Penalties, Coords, Sail, Settings, Status};
+use crate::position::{Heading, Penalties, Coords, Sail, BoatSettings, BoatStatus};
 use crate::router::{IsochroneSection, Router, RouteInfos, RouteRequest, RouteResult, WaypointStatus, Wind, Isochrone, IsochronePoint};
 use crate::utils::{Distance, Speed};
 use crate::wind::Provider;
@@ -44,7 +44,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
         let start_routing = Utc::now();
 
-        self.debug(format!("Route asked : {:?}", request));
+        debug!("Route asked : {:?}", request);
 
         let boat_options = Arc::new(boat_options);
 
@@ -408,11 +408,11 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
                 duration: from.duration.clone() + jump_duration,
                 distance,
                 reached: None,
-                settings: Settings {
+                settings: BoatSettings {
                     heading: heading.clone(),
                     sail: polar_result.sail,
                 },
-                status: Status {
+                status: BoatStatus {
                     aground: false,
                     boat_speed,
                     wind: wind.clone(),
@@ -474,11 +474,11 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
                     duration: from.duration.clone() + duration_to_buoy,
                     distance: distance.clone(),
                     reached: if to.is_waypoint() { Some(to.name().clone()) } else { None },
-                    settings: Settings {
+                    settings: BoatSettings {
                         heading: heading.clone(),
                         sail: polar_result.sail,
                     },
-                    status: Status {
+                    status: BoatStatus {
                         aground: false,
                         boat_speed,
                         wind: wind.clone(),
@@ -1060,8 +1060,8 @@ pub(crate) struct Position {
     pub(crate) duration: NavDuration,
     pub(crate) distance: Distance,
     pub(crate) reached: Option<String>,
-    pub(crate) settings: Settings,
-    pub(crate) status: Status,
+    pub(crate) settings: BoatSettings,
+    pub(crate) status: BoatStatus,
     pub(crate) previous: Option<Arc<Position>>,
     pub(crate) is_in_ice_limits: bool,
     pub(crate) remaining_penalties: Penalties,

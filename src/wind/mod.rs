@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, fmt::{Display, Formatter}};
 
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
+use tsify::Tsify;
 
 use crate::{position::Coords, utils::Speed};
 
@@ -42,9 +43,11 @@ pub(crate) fn vector_to_degrees(u: f64, v: f64) -> f64 {
     velocity_dir_to_degrees
 }
   
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Wind {
     pub(crate) direction: f64,
+    #[tsify(type = "number")]
     pub(crate) speed: Speed,
 }
 

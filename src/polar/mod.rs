@@ -460,7 +460,8 @@ impl Polar {
 
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Vmgs {
     pub(crate) up: Vmg,
     pub(crate) optimized_up: Option<Vmg>,
@@ -468,7 +469,8 @@ pub(crate) struct Vmgs {
     pub(crate) optimized_down: Option<Vmg>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Vmg {
     pub(crate) twa: f64,
     pub(crate) sail: position::Sail,
