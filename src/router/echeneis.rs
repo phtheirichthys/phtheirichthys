@@ -287,7 +287,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
         let mut way = Vec::new();
 
         if let Some(last) = best {
-            way.push(router::Waypoint {
+            way.push(router::RouteWaypoint {
                 from: last.point.clone(),
                 duration: last.duration.absolute.clone(),
                 way_duration: Duration::zero(),
@@ -309,7 +309,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
             let mut next = last;
             while let Some(last) = next.previous.as_ref() {
-                way.push(router::Waypoint {
+                way.push(router::RouteWaypoint {
                     from: last.point.clone(),
                     duration: last.duration.absolute,
                     way_duration: next.duration.relative.clone(),

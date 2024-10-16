@@ -62,14 +62,14 @@ pub(crate) struct RouteInfos {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct RouteResult {
   pub(crate) infos: RouteInfos,
-  pub(crate) way: Vec<Waypoint>,
+  pub(crate) way: Vec<RouteWaypoint>,
   sections: Vec<IsochroneSection>,
   debug: Vec<IsochronePoint>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub(crate) struct Waypoint {
+pub(crate) struct RouteWaypoint {
   pub(crate) from: Coords,
   #[serde(serialize_with = "duration_to_seconds", deserialize_with = "seconds_to_duration")]
   pub(crate) duration: Duration,
@@ -92,7 +92,7 @@ where D: serde::Deserializer<'de>
   Ok(Duration::seconds(buf))
 }
 
-impl Display for Waypoint {
+impl Display for RouteWaypoint {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match self.boat_settings.heading {
       Heading::HEADING(heading) => {
