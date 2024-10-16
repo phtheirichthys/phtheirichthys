@@ -2,6 +2,7 @@ use crate::position::Coords;
 use crate::utils::{Distance, DistanceUnit};
 
 pub(crate) mod spherical;
+pub(crate) mod cubecl_spherical;
 
 const MEAN_EARTH_RADIUS: Distance = Distance {
     value: 6371008.8,

@@ -1,5 +1,6 @@
 use std::convert::TryInto;
 use std::fmt::{Debug, Display, Formatter};
+use std::future::Future;
 use std::io::Cursor;
 use std::ops::Add;
 use std::sync::{Arc, Mutex};
@@ -7,10 +8,16 @@ use anyhow::{bail, Result};
 use byteorder::ReadBytesExt;
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use chrono::serde::ts_seconds;
+use clokwerk::{AsyncScheduler, Job, TimeUnits};
+use futures_util::future::ready;
+#[cfg(feature = "wasm")]
 use gloo::timers::callback::Interval;
 use log::{debug, error};
 use reqwest::Url;
 use serde::Deserialize;
+#[cfg(feature = "tokio")]
+use tokio::task::spawn_local;
+use futures_util::stream::StreamExt;
 
 use crate::wind::ProviderStatus;
 use crate::{position::Coords, utils::Speed, wind::{vector_to_degrees, InstantWind, Provider, Wind}};
@@ -29,48 +36,41 @@ impl Provider for VrWindProvider {
 
         let references = self.references.clone();
 
-        let interval = Interval::new(10*60*1_000, move || {
-            let references = references.clone();
-            wasm_bindgen_futures::spawn_local(async move {
-                match Self::load().await {
-                    Ok(mut refs) => {
-                        let mut errors = false;
-
-                        for reference in refs.references.iter_mut() {
-                            for r in reference.iter_mut() {
-                                let found = {
-                                    let mut references = references.lock().unwrap();
-                                    let (data, found) = references.move_data(&r.reference);
-                                    r.data = data;
-                                    found
-                                };
-                                if !found {
-                                    match r.load().await {
-                                        Ok(_) => {}
-                                        Err(e) => {
-                                            errors = true;
-                                            error!("Error loading reference data : {}", e);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if !errors {
-                            let mut references = references.lock().unwrap();
-                            *references = refs;
-                        }
-                    },
-                    Err(e) => {
-                        error!("Error loading winds references : {}", e);
-                    }
-                }
+        #[cfg(feature = "wasm")]
+        {
+            let interval = Interval::new(10*60*1_000, move || {
+                let references = references.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    Self::init(references).await;
+                });
             });
-        });
 
-        interval.forget();
+            interval.forget();
+            //
+            // wasm_bindgen_futures::spawn_local(async move {
+            //     IntervalStream::new(10*60*1_000).for_each(move |_| {
+            //         async move {
+            //             future().await;
+            //         }
+            //     }).await
+            // });
+        }
+
+        #[cfg(not(feature = "wasm"))]
+        {
+            let mut scheduler = AsyncScheduler::new();
+
+            scheduler.every(10.minutes()).plus(1.minutes())
+                .run(move || {
+                    let references = references.clone();
+                    async move {
+                        Self::init(references);
+                    }
+                });
+        }
 
     }
+
 
     fn status(&self) -> ProviderStatus {
         let references: std::sync::MutexGuard<References> = self.references.lock().unwrap();
@@ -86,7 +86,7 @@ impl Provider for VrWindProvider {
         }
     }
 
-    fn find(&self, m: &chrono::prelude::DateTime<chrono::prelude::Utc>) -> Box<dyn InstantWind> {
+    fn find(&self, m: &chrono::prelude::DateTime<chrono::prelude::Utc>) -> Box<dyn InstantWind + Send + Sync> {
         let m = m.add(Duration::minutes(-1)).duration_trunc(Duration::minutes(10)).expect("datetime rounded");
 
         let references = self.references.lock().unwrap();
@@ -184,6 +184,41 @@ impl VrWindProvider {
         }
     }
 
+    async fn init(references: Arc<Mutex<References>>) {
+        match Self::load().await {
+            Ok(mut refs) => {
+                let mut errors = false;
+
+                for reference in refs.references.iter_mut() {
+                    for r in reference.iter_mut() {
+                        let found = {
+                            let mut references = references.lock().unwrap();
+                            let (data, found) = references.move_data(&r.reference);
+                            r.data = data;
+                            found
+                        };
+                        if !found {
+                            match r.load().await {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    errors = true;
+                                    error!("Error loading reference data : {}", e);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !errors {
+                    let mut references = references.lock().unwrap();
+                    *references = refs;
+                }
+            },
+            Err(e) => {
+                error!("Error loading winds references : {}", e);
+            }
+        }
+    }
 }
 
 #[derive(Debug)]

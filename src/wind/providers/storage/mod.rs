@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-pub(crate) mod web_sys;
+// pub(crate) mod web_sys;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]

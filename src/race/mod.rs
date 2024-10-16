@@ -5,7 +5,7 @@ use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use log::info;
 use serde::{Serialize, Deserialize};
-use tsify::Tsify;
+use tsify_next::Tsify;
 use crate::algorithm::Algorithm;
 use crate::algorithm::spherical::Spherical;
 use crate::position::Coords;
@@ -51,7 +51,7 @@ impl RacesSpec for Races {
 
 #[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub(crate) struct Race {
+pub struct Race {
     pub(crate) id: String,
     pub(crate) name: String,
     pub(crate) leg: u8,

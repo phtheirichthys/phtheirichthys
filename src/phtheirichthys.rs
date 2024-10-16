@@ -1,20 +1,22 @@
 use std::sync::Arc;
-use anyhow::Result;
+use anyhow::{bail, Result};
 
 use chrono::{DateTime, Duration, Utc};
-use gloo::timers::callback::Timeout;
-use log::{debug, error};
+use cubecl::prelude::*;
+// use gloo::timers::callback::Timeout;
+use log::error;
 use serde::{Deserialize, Serialize};
-use tsify::Tsify;
+use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
-use web_sys::OffscreenCanvas;
 
 use crate::{algorithm, land, wind};
 use crate::land::vr::VrLandProvider;
 use crate::race::{Race, Races, RacesSpec};
 use crate::router::echeneis::EcheneisConfig;
 use crate::router::{RouteResult, Router};
-use crate::{polar::{Polar, Polars, PolarsSpec}, position::{Heading, Penalties, Coords, BoatSettings, BoatStatus}, router::{echeneis::{Echeneis, NavDuration, Position}, RouteRequest}, utils::Distance, wind::{providers::{config::ProviderConfig, ProviderResultSpec as _}, ProviderStatus, Wind}};
+use crate::{polar::{Polar, Polars, PolarsSpec}, position::{Heading, Penalties, Coords}, router::{echeneis::{Echeneis, NavDuration, Position}, RouteRequest}, utils::Distance, wind::{providers::config::ProviderConfig, ProviderStatus, Wind}};
+use crate::algorithm::Algorithm;
+use crate::polar::PolarCache;
 
 pub struct Phtheirichthys {
     wind_providers: wind::providers::Providers,
@@ -31,7 +33,7 @@ pub struct SnakeResult {
 
 impl Phtheirichthys {
 
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Phtheirichthys {
             wind_providers: wind::providers::Providers::new(),
             land_providers: land::Providers::new(),
@@ -40,7 +42,7 @@ impl Phtheirichthys {
         }
     }
 
-    pub(crate) async fn add_wind_provider(&self) {
+    pub async fn add_wind_provider(&self) {
         //self.providers.init_provider(&ProviderConfig::Noaa(NoaaProviderConfig { enabled: true, gribs: StorageConfig::WebSys { prefix: "__".into() } }));
         match self.wind_providers.init_provider(&ProviderConfig::Vr).await {
             Ok(()) => {},
@@ -48,7 +50,7 @@ impl Phtheirichthys {
         }
     }
 
-    pub(crate) fn get_wind_provider_status(&self, provider: String) -> anyhow::Result<ProviderStatus> {
+    pub fn get_wind_provider_status(&self, provider: String) -> anyhow::Result<ProviderStatus> {
         self.wind_providers.get_status(provider)
     }
 
@@ -56,7 +58,7 @@ impl Phtheirichthys {
         self.wind_providers.get_wind(provider, m, point)
     }
 
-    pub(crate) async fn add_land_provider(&self) {
+    pub async fn add_land_provider(&self) {
         //self.providers.init_provider(&ProviderConfig::Noaa(NoaaProviderConfig { enabled: true, gribs: StorageConfig::WebSys { prefix: "__".into() } }));
         match self.land_providers.init_provider(&land::config::ProviderConfig::Vr).await {
             Ok(()) => {},
@@ -64,11 +66,11 @@ impl Phtheirichthys {
         }
     }
 
-    pub(crate) fn draw_land(&self, provider: String, canvas: &OffscreenCanvas, x: i64, y: i64, z: u32, width: usize, height: usize) -> Result<()> {
-        self.land_providers.draw(provider, canvas, x, y, z, width, height)
+    pub(crate) fn draw_land(&self, provider: String, x: i64, y: i64, z: u32, width: usize, height: usize, f: Box<dyn FnOnce(&Vec<u8>) -> Result<()> + 'static>) -> Result<()> {
+        self.land_providers.draw(provider, x, y, z, width, height, f)
     }
 
-    pub(crate) fn add_polar(&self, name: String, polar: Polar) {
+    pub fn add_polar(&self, name: String, polar: Polar) {
         let mut polars = self.polars.write().unwrap();
 
         polars.insert(name, Arc::new(polar));
@@ -89,7 +91,7 @@ impl Phtheirichthys {
     pub(crate) fn eval_snake(&self, route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<SnakeResult> {
         let wind_provider = self.wind_providers.get(params.wind_provider)?;
         let start = Arc::new(route_request.from.clone());
-        let polar = self.polars.get(&params.polar)?;
+        let mut polar = PolarCache::new(self.polars.get(&params.polar)?);
         let boat_options = Arc::new(params.boat_options);
 
         let mut now = route_request.start_time;
@@ -121,7 +123,7 @@ impl Phtheirichthys {
             let jump = Echeneis::<_>::jump2(
                 &std::sync::Arc::new(crate::algorithm::spherical::Spherical{}),
                 None,
-                &polar,
+                &mut polar,
                 &boat_options.clone(),
                 &start,
                 &Arc::new(src),
@@ -142,27 +144,94 @@ impl Phtheirichthys {
         Ok(SnakeResult { positions: result })
     }
 
-    pub(crate) async fn navigate(&self, wind_provider: String, polar_id: String, race: Race, boat_options: BoatOptions, request: RouteRequest) -> Result<()> {
+    fn launch<R: Runtime>(device: &R::Device) {
 
+        let start = Utc::now();
+
+        let client = R::client(device);
+
+        let mut vec: Vec<f32> = Vec::with_capacity(1024);
+        for _ in 0..vec.capacity() {
+            vec.push(rand::random());
+        }
+        let from_lat = vec.as_slice();
+        let mut vec: Vec<f32> = Vec::with_capacity(1024);
+        for _ in 0..vec.capacity() {
+            vec.push(rand::random());
+        }
+        let from_lon = vec.as_slice();
+        let mut vec: Vec<f32> = Vec::with_capacity(1024);
+        for _ in 0..vec.capacity() {
+            vec.push(rand::random());
+        }
+        let to_lat = vec.as_slice();
+        let mut vec: Vec<f32> = Vec::with_capacity(1024);
+        for _ in 0..vec.capacity() {
+            vec.push(rand::random());
+        }
+        let to_lon = vec.as_slice();
+
+        let output_handle = client.empty(from_lat.len() * core::mem::size_of::<f32>());
+        let from_lat_handle = client.create(f32::as_bytes(from_lat));
+        let from_lon_handle = client.create(f32::as_bytes(from_lon));
+        let to_lat_handle = client.create(f32::as_bytes(to_lat));
+        let to_lon_handle = client.create(f32::as_bytes(to_lon));
+
+        unsafe {
+            algorithm::cubecl_spherical::distance_to_array::launch_unchecked::<F32, R>(
+                &client,
+                CubeCount::Static(1, 1, 1),
+                CubeDim::new(from_lat.len() as u32, 1, 1),
+                ArrayArg::from_raw_parts(&from_lat_handle, from_lat.len(), 1),
+                ArrayArg::from_raw_parts(&from_lon_handle, from_lon.len(), 1),
+                ArrayArg::from_raw_parts(&to_lat_handle, to_lat.len(), 1),
+                ArrayArg::from_raw_parts(&to_lon_handle, to_lon.len(), 1),
+                ArrayArg::from_raw_parts(&output_handle, from_lat.len(), 1),
+            )
+        };
+
+        let bytes = client.read(output_handle.binding());
+        let output = f32::from_bytes(&bytes);
+
+        // Should be [-0.1587,  0.0000,  0.8413,  5.0000]
+        println!("Executed gelu with runtime {:?} in {:?}ns => {output:?}", R::name(), (Utc::now() - start).num_nanoseconds());
+
+        let start = Utc::now();
+        let algo = algorithm::spherical::Spherical {};
+        for i in 0..vec.capacity() {
+            algo.distance_to(&Coords {lat: from_lat[i] as f64, lon: from_lon[i] as f64 }, &Coords {lat: to_lat[i] as f64, lon: to_lon[i] as f64 });
+        }
+
+        println!("Executed loop in {:?}ns", (Utc::now() - start).num_nanoseconds());
+    }
+
+    pub fn test_webgpu(&self) -> Result<()> {
+        Self::launch::<cubecl::wgpu::WgpuRuntime>(&Default::default());
+
+        Ok(())
+    }
+    
+    pub async fn navigate(&self, wind_provider: String, polar_id: String, race: Race, boat_options: BoatOptions, request: RouteRequest) -> Result<RouteResult> {
         let wind_provider = self.wind_providers.get(wind_provider)?;
         let polar = self.polars.get(&polar_id)?;
         let lands_provider = Arc::new(VrLandProvider::new()?);
         let algorithm = std::sync::Arc::new(crate::algorithm::spherical::Spherical{});
 
-        let timeout = Timeout::new(0, move || {
-            wasm_bindgen_futures::spawn_local(async move {
+        // let timeout = Timeout::new(0, move || {
+        //     wasm_bindgen_futures::spawn_local(async move {
                 let router = Echeneis::new("".to_string(), polar, wind_provider, lands_provider, algorithm, EcheneisConfig { accuracy: 1.0, display_all_isochrones: false, timeout: 60 });
 
                 match router.route(&race, boat_options, request, None).await {
-                    Ok(_) => {},
-                    Err(e) => error!("Navigation failed : {}", e)
+                    Ok(result) => {
+                        Ok(result)
+                    },
+                    Err(e) => bail!("Navigation failed : {}", e)
                 }
-            });
-        });
+        //     });
+        // });
 
-        timeout.forget();
+        // timeout.forget();
 
-        Ok(())
     }
 }
 

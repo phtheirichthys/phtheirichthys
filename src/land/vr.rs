@@ -1,4 +1,3 @@
-use std::path::{Path, PathBuf};
 use anyhow::{bail, Result};
 use cfg_if::cfg_if;
 use rust_embed::Embed;

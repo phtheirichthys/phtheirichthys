@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, RwLock};
 use anyhow::{bail, Result};
 use chrono::Duration;
 use serde::{Serialize, Deserialize};
-use tsify::Tsify;
+use tsify_next::Tsify;
 use crate::phtheirichthys::BoatOptions;
 use crate::position;
 use crate::position::{Heading, Penalties, Penalty};
@@ -41,6 +41,73 @@ pub(crate) struct PolarResult {
     pub(crate) best: f64,
 }
 
+pub(crate) struct PolarCache {
+    polar: Arc<Polar>,
+    twa_indices: BTreeMap<i32, (usize, usize, f64)>,
+    tws_indices: (usize, usize, f64),
+    last_tws: f64,
+}
+
+impl PolarCache {
+
+    pub(crate) fn new(polar: Arc<Polar>) -> Self {
+        Self {
+            polar,
+            twa_indices: BTreeMap::new(),
+            tws_indices: (0, 0, 0.0),
+            last_tws: -1.0
+        }
+    }
+
+    pub(crate) fn get_boat_speeds(&mut self, heading: &Heading, wind: &Wind, current_sail: &position::Sail, is_in_ice_limits: bool, all: bool) -> Vec<PolarResult> {
+
+        let mut twa = heading.twa(wind.direction);
+        if twa < 0.0 {
+            twa = -1.0 * twa
+        }
+        if twa > 180.0 {
+            twa = 360.0 - twa
+        }
+
+        let tws_indices = self.tws_interpolation_index(wind.speed.kts());
+        let twa_indices = self.twa_interpolation_index(twa);
+
+        self.polar.get_boat_speeds(heading, wind, current_sail, is_in_ice_limits, all, tws_indices, twa_indices)
+    }
+
+    pub(crate) fn add_penalties(&self, boat_options: &Arc<BoatOptions>, penalties: Penalties, stamina: f64, previous_twa: f64, new_twa: f64, previous_sail: &position::Sail, new_sail: &position::Sail, wind_speed: &Speed) -> Penalties {
+        self.polar.add_penalties(boat_options, penalties, stamina, previous_twa, new_twa, previous_sail, new_sail, wind_speed)
+    }
+
+    pub(crate) fn tired(&self, stamina: f64, previous_twa: f64, new_twa: f64, previous_sail: &position::Sail, new_sail: &position::Sail, wind_speed: &Speed) -> f64 {
+        self.polar.tired(stamina, previous_twa, new_twa, previous_sail, new_sail, wind_speed)
+    }
+
+    pub(crate) fn recovers(&self, stamina: f64, duration: &Duration, wind_speed: &Speed) -> f64 {
+        self.polar.recovers(stamina, duration, wind_speed)
+    }
+
+    fn twa_interpolation_index(&mut self, twa: f64) -> (usize, usize, f64) {
+        let binding = self.twa_indices.get(&(twa as i32));
+        if binding.is_some() {
+            binding.unwrap().clone()
+        } else {
+            let twa_indices = Polar::interpolation_index(&self.polar.twa, twa);
+            self.twa_indices.insert(twa as i32, twa_indices);
+            twa_indices.clone()
+        }
+    }
+
+    fn tws_interpolation_index(&mut self, tws: f64) -> (usize, usize, f64) {
+        if self.last_tws != tws {
+            self.tws_indices = Polar::interpolation_index(&self.polar.tws, tws);
+            self.last_tws = tws;
+        }
+
+        self.tws_indices.clone()
+    }
+}
+
 impl Polar {
     fn interpolation_index(values: &Vec<f64>, value: f64) -> (usize, usize, f64) {
         let mut i = 0;
@@ -61,7 +128,7 @@ impl Polar {
         (0, 0, 0.0)
     }
 
-    pub(crate) fn get_boat_speeds(&self, heading: &Heading, wind: &Wind, current_sail: &position::Sail, is_in_ice_limits: bool, all: bool) -> Vec<PolarResult> {
+    pub(crate) fn get_boat_speeds(&self, heading: &Heading, wind: &Wind, current_sail: &position::Sail, is_in_ice_limits: bool, all: bool, tws_indices: (usize, usize, f64), twa_indices: (usize, usize, f64)) -> Vec<PolarResult> {
 
         let mut twa = heading.twa(wind.direction);
         if twa < 0.0 {
@@ -71,13 +138,10 @@ impl Polar {
             twa = 360.0 - twa
         }
 
-        let tws_indices = Self::interpolation_index(&self.tws, wind.speed.kts());
-        let twa_indices = Self::interpolation_index(&self.twa, twa);
-
         let mut boat_speed_max = Speed::from_kts(0.0);
 
         // TODO : manage options
-        let mut speeds: Vec<(position::Sail, Speed, u8)> = Vec::new();
+        let mut speeds: Vec<(position::Sail, Speed, u8)> = Vec::with_capacity(7);
         for sail in self.sail.iter() {
             let ti0 = &sail.speed[twa_indices.0];
             let ti1 = &sail.speed[twa_indices.1];
@@ -140,7 +204,18 @@ impl Polar {
         let mut max_boat_speed: Speed = Default::default();
         let mut best = PolarResult::default();
 
-        for polar_result in self.get_boat_speeds(heading, wind, current_sail, is_in_ice_limits, true).into_iter() {
+        let mut twa = heading.twa(wind.direction);
+        if twa < 0.0 {
+            twa = -1.0 * twa
+        }
+        if twa > 180.0 {
+            twa = 360.0 - twa
+        }
+
+        let tws_indices = Self::interpolation_index(&self.tws, wind.speed.kts());
+        let twa_indices = Self::interpolation_index(&self.twa, twa);
+
+        for polar_result in self.get_boat_speeds(heading, wind, current_sail, is_in_ice_limits, true, tws_indices, twa_indices).into_iter() {
             if using_sail.as_ref().is_some_and(|using_sail| {
                 &&polar_result.sail != using_sail
             }) {

@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, fmt::{Display, Formatter}};
 
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
-use tsify::Tsify;
+use tsify_next::Tsify;
 
 use crate::{position::Coords, utils::Speed};
 
@@ -17,7 +17,7 @@ pub(crate) trait Provider {
 
     fn status(&self) -> ProviderStatus;
 
-    fn find(&self, m: &DateTime<Utc>) -> Box<dyn InstantWind>;
+    fn find(&self, m: &DateTime<Utc>) -> Box<dyn InstantWind + Send + Sync>;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -45,10 +45,10 @@ pub(crate) fn vector_to_degrees(u: f64, v: f64) -> f64 {
   
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub(crate) struct Wind {
-    pub(crate) direction: f64,
+pub struct Wind {
+    pub direction: f64,
     #[tsify(type = "number")]
-    pub(crate) speed: Speed,
+    pub speed: Speed,
 }
 
 impl Display for Wind {

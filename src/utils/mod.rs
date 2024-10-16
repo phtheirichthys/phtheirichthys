@@ -4,11 +4,11 @@ use std::{fmt, ops};
 use chrono::Duration;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Visitor;
-use tsify::Tsify;
+use tsify_next::Tsify;
 
 #[derive(Clone, Debug, Default, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub(crate) struct Speed {
+pub struct Speed {
     pub(crate) value: f64,
     pub(crate) unit: SpeedUnit,
 }
@@ -28,7 +28,7 @@ impl Speed {
         unit: SpeedUnit::Knot,
     };
 
-    pub(crate) fn from_kts(value: f64) -> Self {
+    pub fn from_kts(value: f64) -> Self {
         Self {
             value,
             unit: SpeedUnit::Knot
@@ -191,9 +191,9 @@ impl<'de> Deserialize<'de> for Speed {
 
 #[derive(Clone, Debug, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub(crate) struct Distance {
-    pub(crate) value: f64,
-    pub(crate) unit: DistanceUnit,
+pub struct Distance {
+    pub value: f64,
+    pub unit: DistanceUnit,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -429,6 +429,34 @@ impl<'de> Visitor<'de> for DistanceVisitor {
     }
 
     fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Distance::from_nm(value as f64))
+    }
+
+    fn visit_u8<E>(self, value: u8) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Distance::from_nm(value as f64))
+    }
+
+    fn visit_u16<E>(self, value: u16) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Distance::from_nm(value as f64))
+    }
+
+    fn visit_u32<E>(self, value: u32) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(Distance::from_nm(value as f64))
+    }
+
+    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
     where
         E: de::Error,
     {

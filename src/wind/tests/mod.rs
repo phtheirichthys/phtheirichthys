@@ -1,9 +1,8 @@
 //#![cfg(target_arch = "wasm32")]
 
 extern crate wasm_bindgen_test;
-use std::mem::size_of_val;
 
-use log::{debug, error, Level};
+use log::{debug, Level};
 use wasm_bindgen_test::*;
 
 use crate::wind::{providers::vr::VrWindProvider, Provider};

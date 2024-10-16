@@ -4,7 +4,7 @@ use std::ops::Sub;
 use chrono::Duration;
 use serde::{Serialize, Deserialize, Serializer, de, Deserializer};
 use serde::de::Visitor;
-use tsify::Tsify;
+use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 use crate::polar::Vmgs;
 use crate::router;
@@ -110,18 +110,18 @@ impl Into<usize> for Sail {
 
 #[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub(crate) struct BoatStatus {
-    pub(crate) aground: bool,
+pub struct BoatStatus {
+    pub aground: bool,
     #[tsify(type = "number")]
-    pub(crate) boat_speed: Speed,
-    pub(crate) wind: Wind,
-    pub(crate) foil: u8,
-    pub(crate) boost: u8,
-    pub(crate) best_ratio: f64,
-    pub(crate) ratio: u8,
-    pub(crate) vmgs: Option<Vmgs>,
-    pub(crate) penalties: Penalties,
-    pub(crate) stamina: f64,
+    pub boat_speed: Speed,
+    pub wind: Wind,
+    pub foil: u8,
+    pub boost: u8,
+    pub best_ratio: f64,
+    pub ratio: u8,
+    pub vmgs: Option<Vmgs>,
+    pub penalties: Penalties,
+    pub stamina: f64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Tsify)]

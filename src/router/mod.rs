@@ -3,10 +3,10 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc, serde::ts_milliseconds};
+use chrono::{DateTime, Duration, Utc};
 use chrono_humanize::HumanTime;
 use serde::{Serialize, Serializer, Deserialize};
-use tsify::Tsify;
+use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 use crate::phtheirichthys::BoatOptions;
 use crate::position::{Heading, Penalties, Coords, BoatSettings, BoatStatus};
@@ -24,14 +24,14 @@ pub(crate) trait Router {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub(crate) struct RouteRequest {
-  pub(crate) from: Coords,
+pub struct RouteRequest {
+  pub from: Coords,
   #[tsify(type = "Date")]
-  pub(crate) start_time: DateTime<Utc>,
-  pub(crate) boat_settings: BoatSettings,
-  pub(crate) status: BoatStatus,
+  pub start_time: DateTime<Utc>,
+  pub boat_settings: BoatSettings,
+  pub status: BoatStatus,
   #[serde(skip, default = "default_steps")]
-  pub(crate) steps: Vec<(Duration, Duration)>,
+  pub steps: Vec<(Duration, Duration)>,
 }
 
 fn default_steps() -> Vec<(Duration, Duration)> {
@@ -46,8 +46,9 @@ fn default_steps() -> Vec<(Duration, Duration)> {
   ]
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct RouteInfos {
   pub(crate) start: DateTime<Utc>,
   duration: f64,
@@ -56,8 +57,9 @@ pub(crate) struct RouteInfos {
   foil_duration: f64,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct RouteResult {
   pub(crate) infos: RouteInfos,
   pub(crate) way: Vec<Waypoint>,
@@ -65,12 +67,13 @@ pub(crate) struct RouteResult {
   debug: Vec<IsochronePoint>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Waypoint {
   pub(crate) from: Coords,
-  #[serde(serialize_with = "duration_to_seconds")]
+  #[serde(serialize_with = "duration_to_seconds", deserialize_with = "seconds_to_duration")]
   pub(crate) duration: Duration,
-  #[serde(serialize_with = "duration_to_seconds")]
+  #[serde(serialize_with = "duration_to_seconds", deserialize_with = "seconds_to_duration")]
   pub(crate) way_duration: Duration,
   pub(crate) boat_settings: BoatSettings,
   pub(crate) status: WaypointStatus,
@@ -79,6 +82,14 @@ pub(crate) struct Waypoint {
 fn duration_to_seconds<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
   where S: Serializer {
   serializer.serialize_i64(duration.num_seconds())
+}
+
+fn seconds_to_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where D: serde::Deserializer<'de>
+{
+  let buf = i64::deserialize(deserializer)?;
+
+  Ok(Duration::seconds(buf))
 }
 
 impl Display for Waypoint {
@@ -94,7 +105,8 @@ impl Display for Waypoint {
   }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct WaypointStatus {
   pub(crate) boat_speed: Speed,
   pub(crate) wind: Wind,
@@ -126,9 +138,10 @@ impl Into<BoatStatus> for WaypointStatus {
   }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Penalty {
-  #[serde(serialize_with = "duration_to_seconds")]
+  #[serde(serialize_with = "duration_to_seconds", deserialize_with = "seconds_to_duration")]
   pub(crate) duration: Duration,
   pub(crate) ratio: f64,
   pub(crate) typ: u8,
@@ -144,19 +157,22 @@ impl From<position::Penalty> for Penalty {
   }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 struct IsochroneSection {
   door: String,
   isochrones: Vec<Isochrone>
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 struct Isochrone {
   color: String,
   paths: Vec<Vec<IsochronePoint>>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 struct IsochronePoint {
   pub(crate) lat: f64,
   pub(crate) lon: f64,

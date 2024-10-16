@@ -1,15 +1,23 @@
 [package]
 name = "phtheirichthys"
-version = "0.1.42"
+version = "0.1.43"
 authors = ["Arnaud Bouts <arnaud.bouts@orange.com>"]
 edition = "2018"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "phtheirichthys"
+path = "src/main.rs"
+
 [features]
 default = ["console_error_panic_hook", "land"]
-land = [] 
+land = []
+wasm = ["dep:wasm-bindgen-futures", "dep:web-sys", "dep:gloo"]
+tokio = ["dep:tokio"]
+rayon = ["dep:rayon"]
+
 
 [dependencies]
 anyhow = "1.0.86"
@@ -19,8 +27,9 @@ byteorder = "1.5.0"
 cfg-if = "1.0.0"
 chrono = { version = "0.4.38", default = false, features = ['serde', 'wasmbind'] }
 chrono-humanize = "0.2.3"
+clokwerk = "0.4.0"
 console_log = "1.0.0"
-gloo = { version = "0.11.0", features = ['timers'] }
+gloo = { version = "0.11.0", optional = true, features = ['timers', 'futures'] }
 image = "0.25.1"
 libm = "0.2.8"
 log = "0.4.21"
@@ -29,18 +38,26 @@ reqwest = { version = "0.12", features = ["json"] }
 rust-embed = { version = "8.4.0", features = ["include-exclude"] }
 serde = { version = "1.0.202", features = ["derive"] }
 serde-wasm-bindgen = "0.6.5"
-tsify = { version = "0.4.5", default = false, features = ['js'] }
-wasm-bindgen = "0.2.92"
-wasm-bindgen-futures = "0.4.42"
+tsify-next = { version = "0.5.4", default = false, features = ['js'] }
+wasm-bindgen = { version = "0.2.92", optional = false }
+wasm-bindgen-futures = { version = "0.4.42", optional = true }
+rayon = { version = "1.10.0", optional = true }
+tokio = { version = "1", optional = true, features = ["rt", "macros", "rt-multi-thread"] }
+env_logger = "0.11.5"
+serde_json = "1.0.128"
+cubecl = { version = "0.2.0", features = ["wgpu"] }
+rand = "0.8.5"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
 # all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.7", optional = true }
+futures-util = "0.3.30"
 
 [dependencies.web-sys]
 version = "0.3.69"
+optional = true
 features = [
     'console',
     'FileSystemDirectoryHandle',
@@ -64,7 +81,10 @@ features = [
 ]
 
 [dev-dependencies]
-wasm-bindgen-test = "0.3.42"
+wasm-bindgen-test = "0.3.45"
+tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread"] }
+env_logger = "0.11.5"
+serde_json = "1.0.128"
 
 [profile.release]
 # Tell `rustc` to optimize for small code size.

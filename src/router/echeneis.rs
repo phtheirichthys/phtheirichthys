@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::f64::consts::PI;
 use std::fmt;
 use std::ops::Add;
@@ -9,9 +9,12 @@ use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use chrono_humanize::{Accuracy, Tense, HumanTime};
 use log::{debug, error, info};
+
+#[cfg(feature = "rayon")]
+use rayon::prelude::*;
+
 use crate::race;
-// use rayon::prelude::*;
-use crate::{polar::Polar, race::Race, router};
+use crate::{polar::Polar, polar::PolarCache, race::Race, router};
 use crate::algorithm::Algorithm;
 use crate::algorithm::spherical::Spherical;
 use crate::phtheirichthys::BoatOptions;
@@ -19,7 +22,7 @@ use crate::land::LandsProvider;
 use crate::position::{Heading, Penalties, Coords, Sail, BoatSettings, BoatStatus};
 use crate::router::{IsochroneSection, Router, RouteInfos, RouteRequest, RouteResult, WaypointStatus, Wind, Isochrone, IsochronePoint};
 use crate::utils::{Distance, Speed};
-use crate::wind::Provider;
+use crate::wind::{InstantWind, Provider};
 
 pub(crate) struct Echeneis<A: 'static + Algorithm + Send + Sync> {
     bot_name: String,
@@ -58,7 +61,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
         let mut froms = Nav {
             absolute_duration: Duration::zero(),
             min: None,
-            alternatives: HashMap::from([(0, request.clone().into())]),
+            alternatives: BTreeMap::from([(0, request.clone().into())]),
             reached_by_way: false,
             crossed: false,
         };
@@ -72,12 +75,12 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
         let mut success = true;
 
-        let mut futur_navs: VecDeque<Nav> = VecDeque::new();
+        let mut future_navs: VecDeque<Nav> = VecDeque::new();
 
         let mut deb = Vec::new();
 
         let mut buoys = get_buoys(race, from.clone()).peekable();
-        let mut max = HashMap::new();
+        let mut max = BTreeMap::new();
 
         while let Some(mut destination) = buoys.next() {
 
@@ -86,7 +89,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
             let max_radius = if min.clone() / 1000.0 < Distance::from_nm(1000.0) {
                 min.clone() * 1.5
             } else if min.clone() / 1000.0 < Distance::from_nm(100.0) {
-                min.clone() *2.0
+                min.clone() * 2.0
             } else {
                 min.clone() * 1.5
             };
@@ -108,9 +111,9 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
                 // prepare
 
-                while let Some(futur_nav) = futur_navs.front() {
-                    if futur_nav.absolute_duration < duration + step.clone() {
-                        futur_navs.pop_front();
+                while let Some(future_nav) = future_navs.front() {
+                    if future_nav.absolute_duration < duration + step.clone() {
+                        future_navs.pop_front();
                     } else {
                         break;
                     }
@@ -124,7 +127,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
                 // let mut navs = match timeout(
                     // std::time::Duration::from_secs(self.config.timeout),
-                let mut navs = self.navigate2(&boat_options, &from, &now, froms, &mut destination, step.clone(), factor, &mut max, &max_radius, futur_navs.to_owned()).await;
+                let mut navs = self.navigate2(&boat_options, &from, &now, froms, &mut destination, step.clone(), factor, &mut max, &max_radius, future_navs.to_owned()).await;
                 // ).await {
                 //     Err(_) => {
                 //         bail!("timeout while navigate");
@@ -132,11 +135,10 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
                 //     Ok(res) => res,
                 // };
 
-                /*debug!("->");
+                debug!("->");
                 for nav in navs.iter() {
                     debug!("\t{} : {}", HumanTime::from(nav.absolute_duration).to_text_en(Accuracy::Precise, Tense::Present), nav.size());
-                }*/
-
+                }
 
                 if let Some(nav) = navs.pop_front() {
 
@@ -224,7 +226,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
                             let mut navs = HashMap::new();
                             for previous in reachers[1..].to_vec() {
 
-                                let nav = navs.entry(previous.absolute_duration).or_insert(Nav::from(previous.absolute_duration));
+                                let nav = navs.entry(previous.absolute_duration).or_insert_with(|| Nav::from(previous.absolute_duration));
 
                                 for (az, a) in previous.alternatives.iter() {
                                     let az = (az.clone() as f64 / previous_factor * factor).round() as i32;
@@ -253,7 +255,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
                         for (az, alternative) in nav.alternatives.iter() {
                             for s in 0..8 {
                                 alternative.variants[s].as_ref().map(|p| {
-                                    max.entry(*az).or_insert([Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero()])[s] = p.from_dist.clone() * 1.001;
+                                    max.entry(*az).or_insert_with(|| [Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero()])[s] = p.from_dist.clone() * 1.001;
                                 });
                             }
                         }
@@ -267,7 +269,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
                         success = false
                     }
 
-                    futur_navs = navs;
+                    future_navs = navs;
 
                 } else {
                     bail!("no nav found");
@@ -363,11 +365,22 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         }
     }
 
-    pub(crate) fn jump2(algorithm: &Arc<A>, lands_provider: Option<&Arc<Box<dyn LandsProvider + Send + Sync>>>, polar: &Arc<Polar>, boat_options: &Arc<BoatOptions>, start: &Arc<Coords>, from: &Arc<Position>, to: &Option<Arc<Buoy>>, heading: &Heading, duration: Duration, wind: &Wind, factor: f64) -> Vec<(i32, Position)> {
+    pub(crate) fn jump2(algorithm: &Arc<A>,
+                        lands_provider: Option<&Arc<Box<dyn LandsProvider + Send + Sync>>>,
+                        polar: &mut PolarCache,
+                        boat_options: &Arc<BoatOptions>,
+                        start: &Arc<Coords>,
+                        from: &Arc<Position>,
+                        to: &Option<Arc<Buoy>>,
+                        heading: &Heading,
+                        duration: Duration,
+                        wind: &Wind,
+                        factor: f64) -> Vec<(i32, Position)> {
+
         let twa = heading.twa(wind.direction);
-        // if twa.abs() < 30.0 || twa.abs() > 160.0 {
-        //     return Vec::new()
-        // }
+        if twa.abs() < 30.0 || twa.abs() > 160.0 {
+            return Vec::new()
+        }
 
         polar.get_boat_speeds(&heading, wind, &from.settings.sail, from.is_in_ice_limits, false).into_iter().map(|polar_result| {
             let penalties = polar.add_penalties(boat_options, from.remaining_penalties.clone(), from.remaining_stamina,
@@ -391,7 +404,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
 
             let point = algorithm.destination(&from.point, heading.heading(wind.direction), &distance);
 
-            if lands_provider.is_some() && lands_provider.unwrap().cross_next_land(&from.point, &point) {
+            if lands_provider.is_some() && lands_provider.unwrap().is_land(point.lat, point.lon) {
                 return None;
             }
 
@@ -432,7 +445,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         }).filter(|alt| alt.is_some()).map(|alt| alt.unwrap()).collect()
     }
 
-    fn buoy_reached(algorithm: &Arc<A>, polar: &Arc<Polar>, boat_options: &Arc<BoatOptions>, start: &Arc<Coords>, from: &Arc<Position>, to: &Arc<Buoy>, duration: Duration, wind: &Wind, factor: f64) -> Option<(i32, Position)> {
+    fn buoy_reached(algorithm: &Arc<A>, polar: &mut PolarCache, boat_options: &Arc<BoatOptions>, start: &Arc<Coords>, from: &Arc<Position>, to: &Arc<Buoy>, duration: Duration, wind: &Wind, factor: f64) -> Option<(i32, Position)> {
 
         if from.dist_to > from.distance.clone() * 10.0 {
             return None;
@@ -503,57 +516,83 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         results.into_iter().next()
     }
 
-    fn way2(algorithm: Arc<A>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, polar: Arc<Polar>, boat_options: Arc<BoatOptions>, start: Arc<Coords>, from: Arc<Position>, to: &Option<Arc<Buoy>>, duration: Duration, wind: &Wind, factor: f64) -> Vec<Nav> {
+    fn way2(algorithm: Arc<A>,
+            lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>,
+            polar: &mut PolarCache,
+            boat_options: Arc<BoatOptions>,
+            start: Arc<Coords>,
+            from: Arc<Position>, to: &Option<Arc<Buoy>>,
+            duration: Duration,
+            wind: &Wind,
+            factor: f64) -> Vec<Nav> {
 
         if to.is_some() {
             let to = to.as_ref().unwrap();
-            let reached = Self::buoy_reached(&algorithm, &polar, &boat_options, &start, &from, to, duration, wind, factor);
+            let reached = Self::buoy_reached(&algorithm, polar, &boat_options, &start, &from, to, duration, wind, factor);
             if let Some((_, pos)) = reached {
                 return vec!(Nav{
                     absolute_duration: pos.duration.absolute,
                     min: None,
-                    alternatives: HashMap::from([(-1, Alternative::from(pos))]),
+                    alternatives: BTreeMap::from([(-1, Alternative::from(pos))]),
                     reached_by_way: true,
                     crossed: false,
                 });
             }
         }
 
-        let mut navs:  HashMap<Duration, Nav> = HashMap::new();
+        let mut navs:  BTreeMap<Duration, Nav> = BTreeMap::new();
+        let mut default_nav = Nav::from((from.duration.clone() + duration).absolute);
 
         // If near land : heading. Else twa
-        if lands_provider.near_land(from.point.lat, from.point.lon) {
-            for heading in 0..360 {
-                let heading = Heading::HEADING(heading as f64);
-                let positions = Self::jump2(&algorithm, Some(&lands_provider), &polar, &boat_options, &start, &from, to, &heading, duration, wind, factor);
-
-                for (az, pos) in positions {
-                    let nav = navs.entry(pos.duration.absolute).or_insert(Nav::from(pos.duration.absolute));
-                    nav.min = nav.min.to_owned().or(Some(pos.dist_to.clone())).and_then(|min| if min < pos.dist_to { Some(min) } else { Some(pos.dist_to.clone()) });
-                    let alternative = nav.alternatives.entry(az).or_insert(Alternative::empty());
-                    alternative.merge_fast(pos);
-                }
-            }
-        } else {
+        // if lands_provider.near_land(from.point.lat, from.point.lon) {
+        //     for heading in 0..360 {
+        //         let heading = Heading::HEADING(heading as f64);
+        //         let positions = Self::jump2(&algorithm, Some(&lands_provider), &polar, &boat_options, &start, &from, to, &heading, duration, wind, factor);
+        //
+        //         for (az, pos) in positions {
+        //             let nav = navs.entry(pos.duration.absolute).or_insert_with(|| Nav::from(pos.duration.absolute));
+        //             nav.min = nav.min.to_owned().or(Some(pos.dist_to.clone())).and_then(|min| if min < pos.dist_to { Some(min) } else { Some(pos.dist_to.clone()) });
+        //             let alternative = nav.alternatives.entry(az).or_insert_with(|| Alternative::empty());
+        //             alternative.merge_fast(pos);
+        //         }
+        //     }
+        // } else {
             for twa in -180..180 {
                 let heading = Heading::TWA(twa as f64);
-                let positions = Self::jump2(&algorithm, Some(&lands_provider), &polar, &boat_options, &start, &from, to, &heading, duration, wind, factor);
+                let positions = Self::jump2(&algorithm, Some(&lands_provider), polar, &boat_options, &start, &from, to, &heading, duration, wind, factor);
 
                 for (az, pos) in positions {
-                    let nav = navs.entry(pos.duration.absolute).or_insert(Nav::from(pos.duration.absolute));
-                    nav.min = nav.min.to_owned().or(Some(pos.dist_to.clone())).and_then(|min| if min < pos.dist_to { Some(min) } else { Some(pos.dist_to.clone()) });
-                    let alternative = nav.alternatives.entry(az).or_insert(Alternative::empty());
+                    let nav = if pos.duration.relative == duration { &mut default_nav } else { navs.entry(pos.duration.absolute).or_insert_with(|| Nav::from(pos.duration.absolute)) };
+                    {
+                        // nav.min = nav.min.to_owned().or(Some(pos.dist_to.clone())).and_then(|min| if min < pos.dist_to { Some(min) } else { Some(pos.dist_to.clone()) });
+                        let new_min = match &nav.min {
+                            None => { true }
+                            Some(min) if { min > &pos.dist_to } => { true }
+                            _ => { false }
+                        };
+
+                        if new_min {
+                            nav.min = Some(pos.dist_to.clone())
+                        }
+                    }
+                    let alternative = nav.alternatives.entry(az).or_insert_with(|| Alternative::empty());
                     alternative.merge_fast(pos);
                 }
             }
-        }
+        // }
 
-        let mut navs = navs.iter().map(|(_, nav)| nav.to_owned()).collect::<Vec<Nav>>();
-        navs.sort_by(|a, b| a.absolute_duration.cmp(&b.absolute_duration));
+        let mut navs = if navs.len() > 0 {
+            let mut navs = navs.iter().map(|(_, nav)| nav.to_owned()).collect::<Vec<Nav>>();
+            navs.push(default_nav);
+            navs.sort_by(|a, b| a.absolute_duration.cmp(&b.absolute_duration));
+            navs
+        } else {
+            vec![default_nav]
+        };
         navs
     }
 
-    async fn navigate2(&self, boat_options: &Arc<BoatOptions>, start: &Coords, now: &DateTime<Utc>, from: Nav, to: &mut Buoy, duration: Duration, factor: f64, max: &mut HashMap<i32, [Distance;8]>, max_radius: &Distance, navs: VecDeque<Nav>) -> VecDeque<Nav> {
+    async fn navigate2(&self, boat_options: &Arc<BoatOptions>, start: &Coords, now: &DateTime<Utc>, from: Nav, to: &mut Buoy, duration: Duration, factor: f64, max: &mut BTreeMap<i32, [Distance;8]>, max_radius: &Distance, navs: VecDeque<Nav>) -> VecDeque<Nav> {
 
         let navs = Arc::new(Mutex::new(navs.into_iter().map(|nav| (nav.absolute_duration, nav)).collect::<HashMap<Duration, Nav>>()));
 
@@ -564,84 +603,10 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         let boat_options = boat_options.clone();
         let start = Arc::new(start.clone());
 
-        // let (send, recv) = tokio::sync::oneshot::channel();
-        {
-            let navs = navs.clone();
-            let winds = winds.clone();
-            let to = Arc::new(to.clone());
-
-            //rayon::spawn(move || {
-                from.alternatives.iter().for_each(|(_, alternative)| {
-                    alternative.variants.iter().for_each(|variant| {
-                        variant.as_ref().map(|variant| {
-                            let navs = navs.clone();
-                            let winds = winds.clone();
-                            // let variant = variant.clone();
-                            let algorithm = algorithm.clone();
-                            let lands_provider = lands_provider.clone();
-                            let polar = polar.clone();
-                            let boat_options = boat_options.clone();
-                            let start = start.clone();
-                            let to = to.clone();
-
-                            let wind = winds.interpolate(&variant.point);
-
-                            let way_navs = Self::way2(algorithm, lands_provider, polar, boat_options, start, Arc::new(variant.clone()), &Some(to), duration, &wind, factor);
-
-                            for way_nav in way_navs {
-
-                                if way_nav.reached_by_way {
-
-                                    let mut navs = navs.lock().unwrap();
-
-                                    // remove all navs later than current
-                                    navs.retain(|d, _| d <= &way_nav.absolute_duration);
-
-                                    let nav = navs.entry(way_nav.absolute_duration).or_insert(Nav::from(way_nav.absolute_duration));
-
-                                    if !nav.reached_by_way {
-                                        nav.alternatives.clear();
-                                        nav.reached_by_way = true;
-                                        nav.min = None;
-                                    }
-
-                                    let prev = nav.alternatives.entry(-1).or_insert(Alternative::empty());
-                                    prev.merge_all_by_duration(way_nav.alternatives.get(&-1).unwrap().clone());
-
-                                    break;
-
-                                } else {
-
-                                    let mut navs = navs.lock().unwrap();
-
-                                    let nav = navs.entry(way_nav.absolute_duration).or_insert(Nav::from(way_nav.absolute_duration));
-
-                                    if !nav.reached_by_way {
-
-                                        nav.min = match (nav.min.to_owned(), way_nav.min.to_owned()) {
-                                            (None, way_nav_min) => way_nav_min,
-                                            (nav_min, None) => nav_min,
-                                            (Some(nav_min), Some(way_nav_min)) => Some(nav_min.min(way_nav_min)),
-                                        };
-
-                                        for (az, alternative) in way_nav.alternatives {
-                                            let prev = nav.alternatives.entry(az).or_insert(Alternative::empty());
-                                            prev.merge_all(alternative);
-                                        }
-                                    }
-                                }
-                            }
-                        });
-                    });
-                });
-
-            //     let _ = send.send(());
-            // });
-        }
-
-        // recv.await.expect("Panic in rayon::spawn");
+        Self::navigate_from_all(from, to, duration, factor, &navs, winds, algorithm, lands_provider, polar, boat_options, start).await;
 
         let navs = navs.lock().unwrap();
+        debug!("{:?}", navs.keys());
         let mut navs = navs.iter().map(|(_, nav)| nav.to_owned()).collect::<Vec<Nav>>();
         navs.sort_by(|a, b| a.absolute_duration.cmp(&b.absolute_duration));
 
@@ -727,7 +692,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
                                     continue;
                                 }
 
-                                max.entry(*az).or_insert([Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero()])[s] = pos.from_dist.clone() * 1.001;
+                                max.entry(*az).or_insert_with(|| [Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero(), Distance::zero()])[s] = pos.from_dist.clone() * 1.001;
                             }
                             _ => {}
                         }
@@ -794,6 +759,97 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         navs.into()
     }
 
+    #[cfg(feature = "rayon")]
+    async fn navigate_from_all(from: Nav, to: &mut Buoy, duration: Duration, factor: f64, navs: &Arc<Mutex<HashMap<Duration, Nav>>>, winds: Arc<Box<dyn InstantWind + Send + Sync>>, algorithm: Arc<A>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, polar: Arc<Polar>, boat_options: Arc<BoatOptions>, start: Arc<Coords>) {
+        let (send, recv) = tokio::sync::oneshot::channel();
+        {
+            let navs = navs.clone();
+            let winds = winds.clone();
+            let to = Arc::new(to.clone());
+
+            rayon::spawn(move || {
+                from.alternatives.par_iter().for_each(|(_, alternative)| {
+                    Self::navigate_from_alternative(duration, factor, algorithm.clone(), lands_provider.clone(), polar.clone(), boat_options.clone(), start.clone(), navs.clone(), winds.clone(), to.clone(), alternative);
+                });
+
+                let _ = send.send(());
+            });
+        }
+
+        recv.await.expect("Panic in rayon::spawn");
+    }
+
+    #[cfg(not(feature = "rayon"))]
+    async fn navigate_from_all(from: Nav, to: &mut Buoy, duration: Duration, factor: f64, navs: &Arc<Mutex<HashMap<Duration, Nav>>>, winds: Arc<Box<dyn InstantWind + Send + Sync>>, algorithm: Arc<A>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, polar: Arc<Polar>, boat_options: Arc<BoatOptions>, start: Arc<Coords>) {
+        let navs = navs.clone();
+        let winds = winds.clone();
+        let to = Arc::new(to.clone());
+
+        from.alternatives.iter().for_each(|(_, alternative)| {
+            Self::navigate_from_alternative(duration, factor, algorithm.clone(), lands_provider.clone(), polar.clone(), boat_options.clone(), start.clone(), navs.clone(), winds.clone(), to.clone(), alternative);
+        });
+    }
+
+    fn navigate_from_alternative(duration: Duration, factor: f64, algorithm: Arc<A>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, polar: Arc<Polar>, boat_options: Arc<BoatOptions>, start: Arc<Coords>, navs: Arc<Mutex<HashMap<Duration, Nav>>>, winds: Arc<Box<dyn InstantWind + Send + Sync>>, to: Arc<Buoy>, alternative: &Alternative) {
+        let mut polar = PolarCache::new(polar);
+
+        alternative.variants.iter().for_each(|variant| {
+            variant.as_ref().map(|variant| {
+                let navs = navs.clone();
+                let winds = winds.clone();
+                // let variant = variant.clone();
+                let algorithm = algorithm.clone();
+                let lands_provider = lands_provider.clone();
+                let boat_options = boat_options.clone();
+                let start = start.clone();
+                let to = to.clone();
+
+                let wind = winds.interpolate(&variant.point);
+
+                let way_navs = Self::way2(algorithm, lands_provider, &mut polar, boat_options, start, Arc::new(variant.clone()), &Some(to), duration, &wind, factor);
+
+                for way_nav in way_navs {
+                    if way_nav.reached_by_way {
+                        let mut navs = navs.lock().unwrap();
+
+                        // remove all navs later than current
+                        navs.retain(|d, _| d <= &way_nav.absolute_duration);
+
+                        let nav = navs.entry(way_nav.absolute_duration).or_insert_with(|| Nav::from(way_nav.absolute_duration));
+
+                        if !nav.reached_by_way {
+                            nav.alternatives.clear();
+                            nav.reached_by_way = true;
+                            nav.min = None;
+                        }
+
+                        let prev = nav.alternatives.entry(-1).or_insert_with(|| Alternative::empty());
+                        prev.merge_all_by_duration(way_nav.alternatives.get(&-1).unwrap().clone());
+
+                        break;
+                    } else {
+                        let mut navs = navs.lock().unwrap();
+
+                        let nav = navs.entry(way_nav.absolute_duration).or_insert_with(|| Nav::from(way_nav.absolute_duration));
+
+                        if !nav.reached_by_way {
+                            nav.min = match (nav.min.to_owned(), way_nav.min.to_owned()) {
+                                (None, way_nav_min) => way_nav_min,
+                                (nav_min, None) => nav_min,
+                                (Some(nav_min), Some(way_nav_min)) => Some(nav_min.min(way_nav_min)),
+                            };
+
+                            for (az, alternative) in way_nav.alternatives {
+                                let prev = nav.alternatives.entry(az).or_insert_with(|| Alternative::empty());
+                                prev.merge_all(alternative);
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    }
+
     fn get_factor(&self, from: &Coords, to: &Buoy) -> f64 {
         let dist = to.distance(from);
         let polar_result = self.polar.get_boat_speed(&Heading::TWA(90.0), &Wind { direction: 0.0 ,speed: Speed::from_kts(10.0) }, Some(&Sail::from_index(0)), &Sail::from_index(0), false);
@@ -819,7 +875,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
 struct Nav {
     absolute_duration: Duration,
     min: Option<Distance>,
-    alternatives: HashMap<i32, Alternative>,
+    alternatives: BTreeMap<i32, Alternative>,
     reached_by_way: bool,
     crossed: bool,
 }
@@ -830,7 +886,7 @@ impl Nav {
         Nav {
             absolute_duration,
             min: None,
-            alternatives: HashMap::new(),
+            alternatives: BTreeMap::new(),
             reached_by_way: false,
             crossed: false,
         }
@@ -950,6 +1006,12 @@ impl Alternative {
         }
     }
 
+    fn empty_boxed() -> Box<Self> {
+        Box::new(Alternative {
+            variants: [None, None, None, None, None, None, None, None],
+        })
+    }
+
     fn from(pos: Position) -> Self {
         let mut res = Self::empty();
         res.merge_fast(pos);
@@ -989,20 +1051,26 @@ impl Alternative {
     }
 
     fn merge_fast(&mut self, pos: Position) {
+        let sail_index = pos.settings.sail.index.clone();
+        let sail_index = 0;
 
-        let sail = pos.settings.sail.clone();
+        let renew = match &self.variants[sail_index] {
+            None => { true }
+            Some(variant) if { variant.from_dist < &pos.from_dist } => { true }
+            _ => { false }
+        };
 
-        if self.variants[sail.index].is_none() || self.variants[sail.index].as_ref().unwrap().from_dist < pos.from_dist {
-            self.variants[sail.index] = Some(pos);
+        if renew {
+            self.variants[sail_index] = Some(pos);
         }
     }
 
     fn merge(&mut self, pos: Position) {
+        let sail_index = pos.settings.sail.index.clone();
+        let sail_index = 0;
 
-        let sail = pos.settings.sail.clone();
-
-        if self.variants[sail.index].is_none() || pos.better_than(self.variants[sail.index].as_ref().unwrap()) {
-            self.variants[sail.index] = Some(pos);
+        if self.variants[sail_index].is_none() || pos.better_than(self.variants[sail_index].as_ref().unwrap()) {
+            self.variants[sail_index] = Some(pos);
         }
     }
 
@@ -1012,7 +1080,7 @@ impl Alternative {
 
         for s in 0..8 {
             self.variants[s].as_ref().map(|v| {
-                let best = best.get_or_insert(self.variants[s].clone().unwrap());
+                let best = best.get_or_insert_with(|| self.variants[s].clone().unwrap());
                 if v.from_dist > best.from_dist {
                     *best = v.clone();
                 }
@@ -1027,7 +1095,7 @@ impl Alternative {
         let mut best = None;
 
         self.variants[sail].as_ref().map(|v| {
-            let best = best.get_or_insert(self.variants[sail].clone().unwrap());
+            let best = best.get_or_insert_with(|| self.variants[sail].clone().unwrap());
             if v.from_dist > best.from_dist {
                 *best = v.clone();
             }
@@ -1366,7 +1434,7 @@ impl Buoy {
 
         // TODO : should be factor of next buoy
         let az = (az * factor).round() as i32;
-        let alternative = last.alternatives.entry(az).or_insert(Alternative::empty());
+        let alternative = last.alternatives.entry(az).or_insert_with(|| Alternative::empty());
 
         alternative.merge(Position {
             az,
