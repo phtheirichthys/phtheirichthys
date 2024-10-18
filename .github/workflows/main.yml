@@ -12,7 +12,7 @@ jobs:
       - name: Land
         run: tar -xzf land.tgz
 
-      - run: wasm-pack build --features wasm
+      - run: wasm-pack build --target web --features wasm
       - run: npm pkg set name=@phtheirichthys/phtheirichthys
         working-directory: pkg
       - run: wasm-pack pack
