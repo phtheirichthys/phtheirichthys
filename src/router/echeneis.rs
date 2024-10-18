@@ -375,10 +375,11 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
                         heading: &Heading,
                         duration: Duration,
                         wind: &Wind,
-                        factor: f64) -> Vec<(i32, Position)> {
+                        factor: f64,
+                        snake: bool,) -> Vec<(i32, Position)> {
 
         let twa = heading.twa(wind.direction);
-        if twa.abs() < 30.0 || twa.abs() > 160.0 {
+        if !snake && (twa.abs() < 30.0 || twa.abs() > 160.0) {
             return Vec::new()
         }
 
@@ -559,7 +560,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         // } else {
             for twa in -180..180 {
                 let heading = Heading::TWA(twa as f64);
-                let positions = Self::jump2(&algorithm, Some(&lands_provider), polar, &boat_options, &start, &from, to, &heading, duration, wind, factor);
+                let positions = Self::jump2(&algorithm, Some(&lands_provider), polar, &boat_options, &start, &from, to, &heading, duration, wind, factor, false);
 
                 for (az, pos) in positions {
                     let nav = if pos.duration.relative == duration { &mut default_nav } else { navs.entry(pos.duration.absolute).or_insert_with(|| Nav::from(pos.duration.absolute)) };
@@ -1481,4 +1482,3 @@ impl Buoy {
         }
     }
 }
-

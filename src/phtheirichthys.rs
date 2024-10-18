@@ -128,7 +128,7 @@ impl Phtheirichthys {
                 &start,
                 &Arc::new(src),
                 &None,
-                &t, Duration::hours(1), &wind, 1.0
+                &t, Duration::hours(1), &wind, 1.0, true
             );
 
             src = jump.iter().map(|(_, pos)| pos).max_by_key(|pos| &pos.distance).unwrap().to_owned();
