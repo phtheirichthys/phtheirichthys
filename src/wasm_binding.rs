@@ -74,6 +74,27 @@ pub fn draw_land(provider: String, canvas: OffscreenCanvas, x: f64, y: f64, z: f
 }
 
 #[wasm_bindgen]
+pub fn draw_wind(provider: String, canvas: OffscreenCanvas, m: js_sys::Date, x: f64, y: f64, z: f64, width: usize, height: usize) -> Result<(), JsValue> {
+
+    let m = Utc.timestamp_millis_opt(m.get_time() as i64).unwrap();
+    match PHTHEIRICHTHYS.read().unwrap().draw_wind(provider, m, x as i64, y as i64, z as u32, width as usize, height as usize, Box::new(move |data: &Vec<u8>| {
+        let data = ImageData::new_with_u8_clamped_array_and_sh(Clamped(data), width as u32, height as u32).map_err(|err| anyhow::Error::msg(format!("Error : {:?}", err)))?;
+        let ctx = canvas.get_context("2d")
+            .map_err(|err| anyhow::Error::msg(format!("Error : {:?}", err)))?
+            .unwrap()
+            .dyn_into::<web_sys::OffscreenCanvasRenderingContext2d>()
+            .map_err(|err| anyhow::Error::msg(format!("Error : {:?}", err)))?;
+        ctx.put_image_data(&data, 0.0, 0.0).map_err(|err| anyhow::Error::msg(format!("Error : {:?}", err)))
+    })) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            error!("Error drawing land : {:?}", e);
+            Err(js_sys::Error::new(&e.to_string()))?
+        },
+    }
+}
+
+#[wasm_bindgen]
 pub fn eval_snake(route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<SnakeResult, JsValue> {
     match PHTHEIRICHTHYS.read().unwrap().eval_snake(route_request, params, heading) {
         Ok(res) => Ok(res),

@@ -101,6 +101,24 @@ impl Providers {
             },
         }
     }
+
+    pub(crate) fn draw(&self, provider: String, m: DateTime<Utc>, x: i64, y: i64, z: u32, width: usize, height: usize, f: Box<dyn FnOnce(&Vec<u8>) -> Result<()> + 'static>) -> Result<()> {
+        debug!("Draw wind {provider} ({x},{y},{z}) ({width},{height})");
+
+        let providers: std::sync::RwLockReadGuard<HashMap<String, Arc<dyn Provider + Sync + Send>>> = self.providers.read().unwrap();
+
+        match providers.get(&provider) {
+            Some(provider) => {
+                debug!("Found provider");
+
+                //let f = Box::new(|data| f(data));
+                provider.find(&m).draw(x, y, z, width, height, f)
+            },
+            None => {
+                bail!("Provider not found")
+            },
+        }
+    }
 }
 
 type ProviderResult<'a> = Result<Arc<dyn Provider + Sync + Send>>;

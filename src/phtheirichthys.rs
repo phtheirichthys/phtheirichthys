@@ -70,6 +70,10 @@ impl Phtheirichthys {
         self.land_providers.draw(provider, x, y, z, width, height, f)
     }
 
+    pub(crate) fn draw_wind(&self, provider: String, m: DateTime<Utc>, x: i64, y: i64, z: u32, width: usize, height: usize, f: Box<dyn FnOnce(&Vec<u8>) -> Result<()> + 'static>) -> Result<()> {
+        self.wind_providers.draw(provider, m, x, y, z, width, height, f)
+    }
+
     pub fn add_polar(&self, name: String, polar: Polar) {
         let mut polars = self.polars.write().unwrap();
 

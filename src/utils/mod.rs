@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::{fmt, ops};
+use std::f64::consts::PI;
 use chrono::Duration;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Visitor;
@@ -472,4 +473,16 @@ impl<'de> Deserialize<'de> for Distance {
     {
         deserializer.deserialize_f64(DistanceVisitor)
     }
+}
+
+pub(crate) fn to_lat_lon(x: f64, y: f64, z: f64) -> (f64, f64) {
+    let size = 256.0 * 2_f64.powf(z);
+    let bc = size / 360.0;
+    let cc = size / (2.0 * PI);
+    let zc = size / 2.0;
+    let g = (y - zc) / -cc;
+    let lon = (x - zc) / bc;
+    let lat = (2.0 * g.exp().atan() - 0.5 * PI).to_degrees();
+
+    (lat, lon)
 }

@@ -4,7 +4,7 @@ use std::{collections::HashMap, f64::consts::PI, sync::{Arc, RwLock}};
 use config::ProviderConfig;
 use log::{debug, error, info};
 
-use crate::position::Coords;
+use crate::{position::Coords, utils};
 
 pub(crate) mod config;
 pub(crate) mod vr;
@@ -27,18 +27,15 @@ impl Providers {
             ProviderConfig::Vr => {
                 let providers = self.providers.clone();
 
-                // wasm_bindgen_futures::spawn_local(async move {
-                // tokio::spawn(async move {
-                    match vr::VrLandProvider::new() {
-                        Ok(vr) => {
-                            let mut providers: std::sync::RwLockWriteGuard<HashMap<String, Arc<Box<dyn LandsProvider + Sync + Send>>>> = providers.write().unwrap();
-                            providers.insert("vr".into(), Arc::new(vr));
-                        },
-                        Err(e) => {
-                            error!("Failed starting vr land provider : {}", e);
-                        }
+                match vr::VrLandProvider::new() {
+                    Ok(vr) => {
+                        let mut providers: std::sync::RwLockWriteGuard<HashMap<String, Arc<Box<dyn LandsProvider + Sync + Send>>>> = providers.write().unwrap();
+                        providers.insert("vr".into(), Arc::new(vr));
+                    },
+                    Err(e) => {
+                        error!("Failed starting vr land provider : {}", e);
                     }
-                // });
+                }
             }
         }
 
@@ -54,7 +51,6 @@ impl Providers {
             Some(provider) => {
                 debug!("Found provider");
 
-                //let f = Box::new(|data| f(data));
                 provider.draw(x, y, z, width, height, f)
             },
             None => {
@@ -172,7 +168,7 @@ pub(crate) trait LandsProvider {
         for i in 0..width {
             for j in 0..height {
 
-                let (lat, lon) = to_lat_lon((x * width as i64 + i as i64) as f64, (y * height as i64 + j as i64) as f64, z as f64);
+                let (lat, lon) = utils::to_lat_lon((x * width as i64 + i as i64) as f64, (y * height as i64 + j as i64) as f64, z as f64);
 
                 if self.is_land(lat, lon) {
                     data[(j * width + i) * 4] = 0;
@@ -180,98 +176,9 @@ pub(crate) trait LandsProvider {
                     data[(j * width + i) * 4 + 2] = 0;
                     data[(j * width + i) * 4 + 3] = 255;
                 }
-
-                // if i == 0 || j == 0 || i == width - 1 || j == height - 1 {
-                //     data[(j * width + i) * 4] = 0;
-                //     data[(j * width + i) * 4 + 1] = 0;
-                //     data[(j * width + i) * 4 + 2] = 255;
-                //     data[(j * width + i) * 4 + 3] = 255;
-                // }
-
-                // if lat.abs() / 10.0 - ((lat.abs() as i64 / 10) as f64) < (bb.south-bb.north).abs() / height as f64 ||
-                //     lon.abs() / 10.0 - ((lon.abs() as i64 / 10) as f64) < (bb.east-bb.west).abs() / width as f64
-                // {
-                //     data[(j * width + i) * 4] = 0;
-                //     data[(j * width + i) * 4 + 1] = 255;
-                //     data[(j * width + i) * 4 + 2] = 0;
-                //     data[(j * width + i) * 4 + 3] = 255;
-                // }
             }
         }
 
         f(&data)
-
-        // let data = ImageData::new_with_u8_clamped_array_and_sh(Clamped(&data), width as u32, height as u32)?;
-        // let ctx = canvas.get_context("2d")?.unwrap().dyn_into::<web_sys::OffscreenCanvasRenderingContext2d>()?;
-        // ctx.put_image_data(&data, 0.0, 0.0)
     }
-}
-
-struct BoundingBox {
-	north: f64,
-	south: f64,
-	east: f64,
-	west: f64,
-}
-
-fn to_lat_lon(x: f64, y: f64, z: f64) -> (f64, f64) {
-    let size = 256.0 * 2_f64.powf(z);
-    let bc = size / 360.0;
-    let cc = size / (2.0 * PI);
-    let zc = size / 2.0;
-    let g = (y - zc) / -cc;
-    let lon = (x - zc) / bc;
-    let lat = (2.0 * g.exp().atan() - 0.5 * PI).to_degrees();
-
-    (lat, lon)
-}
-
-fn tile2boudingbox(x: f64, y: f64, z: f64) -> BoundingBox {
-    let ll = (x * 256.0, (y + 1.0) * 256.0);
-    let ur = ((x + 1.0) * 256.0, y * 256.0);
-
-    let size = 256.0 * 2_f64.powf(z);
-    let bc = size / 360.0;
-    let cc = size / (2.0 * PI);
-    let zc = size / 2.0;
-    let g = (ll.1 - zc) / -cc;
-    let west = (ll.0 - zc) / bc;
-    let south = (2.0 * g.exp().atan() - 0.5 * PI).to_degrees();
-
-    let g = (ur.1 - zc) / -cc;
-    let east = (ur.0 - zc) / bc;
-    let north = (2.0 * g.exp().atan() - 0.5 * PI).to_degrees();
-
-    return BoundingBox{
-		north,
-        south,
-        east,
-        west,
-	}
-}
-
-fn tile2boudingbox2(x: f64, y: f64, z: f64) -> BoundingBox {
-    const R: f64 = 6378137.0;
-
-    let scale = 0.5 / (PI * R);
-    let (a, b, c, d) = (scale, 0.5, -1.0 * scale, 0.5);
-
-    let scale = 256.0 * 2_f64.powf(z);
-
-    let (north, west) = {
-        let (x, y) = ((x / scale - b) / a, (y / scale - d) / c);
-        ((2.0 * (y / R).exp().atan() - PI / 2.0) * d, x * d / R)
-    };
-
-    let (south, east) = {
-        let (x, y) = (((x - 1.0) / scale - b) / a, ((y - 1.0) / scale - d) / c);
-        ((2.0 * (y / R).exp().atan() - PI / 2.0).to_degrees(), (x / R).to_degrees())
-    };
-    
-	return BoundingBox{
-		north,
-        south,
-        east,
-        west,
-	}
 }

@@ -130,6 +130,7 @@ impl Provider for VrWindProvider {
 
         Box::new(VrInstantWind { w1, w2: None, h: 0.0 })
     }
+
 }
 
 impl VrWindProvider {
