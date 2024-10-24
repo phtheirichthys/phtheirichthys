@@ -36,12 +36,9 @@ pub struct RouteRequest {
 
 fn default_steps() -> Vec<(Duration, Duration)> {
   vec![
-    // (Duration::minutes(30), Duration::minutes(1)),
-    // (Duration::hours(1),    Duration::minutes(5)),
-    // (Duration::hours(3),    Duration::minutes(10)),
-    // (Duration::hours(12),   Duration::minutes(30)),
-    // (Duration::hours(24),   Duration::hours(1)),
-    // (Duration::hours(144),  Duration::hours(3)),
+    (Duration::hours(1),    Duration::minutes(10)),
+    (Duration::hours(6),    Duration::hours(1)),
+    (Duration::hours(24),   Duration::minutes(3)),
     (Duration::hours(9999), Duration::hours(6)),
   ]
 }
