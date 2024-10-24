@@ -38,7 +38,7 @@ fn default_steps() -> Vec<(Duration, Duration)> {
   vec![
     (Duration::hours(1),    Duration::minutes(10)),
     (Duration::hours(6),    Duration::hours(1)),
-    (Duration::hours(24),   Duration::minutes(3)),
+    (Duration::hours(24),   Duration::hours(3)),
     (Duration::hours(9999), Duration::hours(6)),
   ]
 }
