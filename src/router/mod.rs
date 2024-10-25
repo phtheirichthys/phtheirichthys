@@ -69,8 +69,10 @@ pub(crate) struct RouteResult {
 pub(crate) struct RouteWaypoint {
   pub(crate) from: Coords,
   #[serde(serialize_with = "duration_to_seconds", deserialize_with = "seconds_to_duration")]
+  #[tsify(type = "number")]
   pub(crate) duration: Duration,
   #[serde(serialize_with = "duration_to_seconds", deserialize_with = "seconds_to_duration")]
+  #[tsify(type = "number")]
   pub(crate) way_duration: Duration,
   pub(crate) boat_settings: BoatSettings,
   pub(crate) status: WaypointStatus,
@@ -105,6 +107,7 @@ impl Display for RouteWaypoint {
 #[derive(Clone, Debug, Deserialize, Serialize, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct WaypointStatus {
+  #[tsify(type = "number")]
   pub(crate) boat_speed: Speed,
   pub(crate) wind: Wind,
   pub(crate) foil: u8,
@@ -139,6 +142,7 @@ impl Into<BoatStatus> for WaypointStatus {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Penalty {
   #[serde(serialize_with = "duration_to_seconds", deserialize_with = "seconds_to_duration")]
+  #[tsify(type = "number")]
   pub(crate) duration: Duration,
   pub(crate) ratio: f64,
   pub(crate) typ: u8,
