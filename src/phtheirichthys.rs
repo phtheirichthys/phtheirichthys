@@ -14,7 +14,7 @@ use crate::land::vr::VrLandProvider;
 use crate::race::{Race, Races, RacesSpec};
 use crate::router::echeneis::EcheneisConfig;
 use crate::router::{RouteResult, Router};
-use crate::{polar::{Polar, Polars, PolarsSpec}, position::{Heading, Penalties, Coords}, router::{echeneis::{Echeneis, NavDuration, Position}, RouteRequest}, utils::Distance, wind::{providers::config::ProviderConfig, ProviderStatus, Wind}};
+use crate::{polar::{Polar, Polars, PolarsSpec}, position::{Heading, Penalties, Coords, StatusRequest, BoatStatus}, router::{echeneis::{Echeneis, NavDuration, Position}, RouteRequest}, utils::Distance, wind::{providers::config::ProviderConfig, ProviderStatus, Wind}};
 use crate::algorithm::Algorithm;
 use crate::polar::PolarCache;
 
@@ -237,6 +237,35 @@ impl Phtheirichthys {
         // timeout.forget();
 
     }
+
+    pub async fn status(&self, wind_provider: String, polar_id: String, boat_options: BoatOptions, request: RouteRequest) -> Result<BoatStatus> {
+        let wind_provider = self.wind_providers.get(wind_provider)?;
+        let polar = self.polars.get(&polar_id)?;
+        let lands_provider = Arc::new(VrLandProvider::new()?);
+        let algorithm = std::sync::Arc::new(crate::algorithm::spherical::Spherical{});
+
+        let instant_wind = wind_provider.find(&request.start_time);
+        let wind = instant_wind.interpolate(&request.from);
+
+        let is_in_ice_limits = false; //TODO : gérer la glace
+        let polar_result = polar.get_boat_speed(&request.boat_settings.heading, &wind, Some(&request.boat_settings.sail), Some(request.boat_settings.sail), is_in_ice_limits);
+
+        let vmgs = polar.get_vmg(&wind.speed, Some(&request.boat_settings.sail), is_in_ice_limits);
+
+        Ok(BoatStatus {
+            aground: lands_provider.is_land(request.position.lat, request.position.lon),
+            boat_speed: polar_result.speed,
+            wind: wind,
+            foil: polar_result.foil,
+            boost: polar_result.boost,
+            best_ratio: polar_result.best,
+            ratio: 100,
+            vmgs: Some(vmgs),
+            penalties: Penalties::new(),
+            stamina: 100.0,
+        })
+    }
+
 }
 
 #[derive(Serialize, Deserialize, Tsify)]
