@@ -24,7 +24,7 @@ fn distance_to_scalar<F: Float>(from_lat: F, from_lon: F, to_lat: F, to_lon: F) 
 
     let mut δλ = (to_lon - from_lon) * PI / F::new(180.0);
     if F::abs(δλ) > PI {
-        if δλ > 0.0 {
+        if δλ > F::new(0.0) {
             δλ = δλ - TAU
         } else {
             δλ = TAU + δλ
