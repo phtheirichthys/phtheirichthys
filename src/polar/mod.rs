@@ -188,7 +188,7 @@ impl Polar {
                 speed: boat_speed.clone(),
                 foil,
                 boost: 0,
-                best: boat_speed.kts() / boat_speed_max.kts()
+                best: if boat_speed_max.kts() > 0.0 { boat_speed.kts() / boat_speed_max.kts() } else { 1.0 }
             }
         }).filter(|res| res.best >= if all { 0.0 } else { 0.5 }).collect()
     }

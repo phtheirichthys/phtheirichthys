@@ -156,8 +156,7 @@ impl Phtheirichthys {
             now += delta;
             winds = wind_provider.find(&now);
             wind = winds.interpolate(&src.point);
-            twa = Heading::TWA(heading.twa(wind.direction).round());
-            twa = f(twa, wind.direction)
+            twa = f(twa, wind.direction);
         }
 
         positions.reverse();
@@ -341,10 +340,10 @@ impl Phtheirichthys {
 #[derive(Serialize, Deserialize, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct SnakeParams {
-    max_duration: i64,
-    polar: String,
-    wind_provider: String,
-    boat_options: BoatOptions,
+    pub(crate) max_duration: i64,
+    pub(crate) polar: String,
+    pub(crate) wind_provider: String,
+    pub(crate) boat_options: BoatOptions,
 }
 
 #[derive(Serialize, Deserialize, Clone, Tsify)]
