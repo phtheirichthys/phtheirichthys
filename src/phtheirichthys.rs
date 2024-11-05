@@ -13,7 +13,7 @@ use crate::{algorithm, land, wind};
 use crate::land::vr::VrLandProvider;
 use crate::race::{Race, Races, RacesSpec};
 use crate::router::echeneis::EcheneisConfig;
-use crate::router::{RouteResult, Router};
+use crate::router::{RouteResult, RouteWaypoint, Router, WaypointStatus};
 use crate::{polar::{Polar, Polars, PolarsSpec}, position::{Heading, Penalties, Coords, BoatStatus}, router::{echeneis::{Echeneis, NavDuration, Position}, RouteRequest}, utils::Distance, wind::{providers::config::ProviderConfig, ProviderStatus, Wind}};
 use crate::algorithm::Algorithm;
 use crate::polar::PolarCache;
@@ -27,8 +27,9 @@ pub struct Phtheirichthys {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct SnakeResult {
-    positions: Vec<(i64, Coords)>
+pub struct Snake {
+    heading: Vec<RouteWaypoint>,
+    twa: Vec<RouteWaypoint>,
 }
 
 impl Phtheirichthys {
@@ -92,11 +93,19 @@ impl Phtheirichthys {
         self.races.set(name, race)
     }
 
-    pub(crate) fn eval_snake(&self, route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<SnakeResult> {
-        let wind_provider = self.wind_providers.get(params.wind_provider)?;
+    pub(crate) fn eval_snake(&self, route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<Snake> {
+        Ok(Snake {
+            heading: self.eval_snake_heading(&route_request, &params, &heading, |_, twd| Heading::TWA(heading.twa(twd).round()))?,
+            twa: self.eval_snake_heading(&route_request, &params, &heading, |twa, _| twa)?,
+        })
+    }
+
+    pub(crate) fn eval_snake_heading<F>(&self, route_request: &RouteRequest, params: &SnakeParams, heading: &Heading, f: F) -> Result<Vec<RouteWaypoint>> 
+    where F: Fn(Heading, f64) -> Heading {
+        let wind_provider = self.wind_providers.get(params.wind_provider.clone())?;
         let start = Arc::new(route_request.from.clone());
         let mut polar = PolarCache::new(self.polars.get(&params.polar)?);
-        let boat_options = Arc::new(params.boat_options);
+        let boat_options = Arc::new(params.boat_options.clone());
 
         let mut now = route_request.start_time;
         let mut duration = Duration::zero();
@@ -105,47 +114,108 @@ impl Phtheirichthys {
 
         let mut src = Position {
             az: 0,
-            point: route_request.from,
+            point: route_request.from.clone(),
             from_dist: Distance::zero(),
             dist_to: Distance::zero(),
             duration: NavDuration::zero(),
             distance: Distance::zero(),
             reached: None,
-            settings: route_request.boat_settings,
+            settings: route_request.boat_settings.clone(),
             status: route_request.status.clone(),
             previous: None,
             is_in_ice_limits: false,
             remaining_penalties: Penalties::new(),
             remaining_stamina: route_request.status.stamina,
         };
-        let mut result = vec![(0, src.point.clone())];
+        let mut positions = vec![(src.clone(), false)];
 
         let mut wind = winds.interpolate(&src.point);
-        let t = Heading::TWA(heading.twa(wind.direction).round());
+        let mut twa = Heading::TWA(heading.twa(wind.direction).round());
 
         while duration < Duration::hours(params.max_duration) {
+            let from: Arc<Position> = Arc::new(src);
             let jump = Echeneis::<_>::jump2(
                 &std::sync::Arc::new(crate::algorithm::spherical::Spherical{}),
                 None,
                 &mut polar,
                 &boat_options.clone(),
                 &start,
-                &Arc::new(src),
+                &from,
                 &None,
-                &t, Duration::hours(1), &wind, 1.0, true
+                &twa, Duration::hours(1), &wind, 1.0, true
             );
 
-            src = jump.iter().map(|(_, pos)| pos).max_by_key(|pos| &pos.distance).unwrap().to_owned();
+            let jump = jump.iter().map(|(_, pos)| pos).max_by_key(|pos| &pos.distance).unwrap().to_owned();
+            let changed = jump.settings.sail != from.settings.sail;
 
-            result.push((duration.num_hours(), src.point.clone()));
+            src = jump;
+
+            positions.push((src.clone(), changed));
 
             duration += delta;
             now += delta;
             winds = wind_provider.find(&now);
             wind = winds.interpolate(&src.point);
+            twa = Heading::TWA(heading.twa(wind.direction).round());
+            twa = f(twa, wind.direction)
         }
 
-        Ok(SnakeResult { positions: result })
+        positions.reverse();
+
+        let mut result = Vec::new();
+        
+        let mut next = None;
+        let mut next_changed = false;
+        for (last, changed) in positions.into_iter() {
+            if next.is_none() {
+                result.push(RouteWaypoint {
+                    from: last.point.clone(),
+                    duration: last.duration.absolute.clone(),
+                    way_duration: Duration::zero(),
+                    boat_settings: Default::default(),
+                    status: WaypointStatus {
+                        boat_speed: Default::default(),
+                        wind: Default::default(),
+                        foil: 0,
+                        boost: 0,
+                        best_ratio: 0.0,
+                        ice: false,
+                        change: false,
+                        penalties: Vec::new(),
+                        remaining_penalties: Vec::new(),
+                        stamina: 0.0,
+                        remaining_stamina: 0.0,
+                    }
+                });
+            } else {
+                let next: Position = next.unwrap();
+                result.push(RouteWaypoint {
+                    from: last.point.clone(),
+                    duration: last.duration.absolute,
+                    way_duration: next.duration.relative.clone(),
+                    boat_settings: next.settings.clone(),
+                    status: WaypointStatus {
+                        boat_speed: next.status.boat_speed.clone(),
+                        wind: next.status.wind.clone(),
+                        foil: next.status.foil,
+                        boost: next.status.boost,
+                        best_ratio: next.status.best_ratio,
+                        ice: next.is_in_ice_limits,
+                        change: next_changed,
+                        penalties: next.status.penalties.clone().into(),
+                        remaining_penalties: next.remaining_penalties.clone().into(),
+                        stamina: next.status.stamina,
+                        remaining_stamina: next.remaining_stamina,
+                    }
+                });
+            }
+            next = Some(last.clone());
+            next_changed = changed;
+        }
+
+        result.reverse();
+
+        Ok(result)
     }
 
     fn launch<R: Runtime>(device: &R::Device) {
@@ -277,7 +347,7 @@ pub(crate) struct SnakeParams {
     boat_options: BoatOptions,
 }
 
-#[derive(Serialize, Deserialize, Tsify)]
+#[derive(Serialize, Deserialize, Clone, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct BoatOptions {
     pub lt: bool,

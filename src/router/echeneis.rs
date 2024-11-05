@@ -951,8 +951,8 @@ impl Nav {
 
 #[derive(Clone, Copy, Debug, Hash)]
 pub(crate) struct NavDuration {
-    absolute: Duration,
-    relative: Duration,
+    pub(crate) absolute: Duration,
+    pub(crate) relative: Duration,
 }
 
 impl NavDuration {

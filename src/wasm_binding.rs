@@ -8,7 +8,7 @@ use tsify_next::{declare, Tsify};
 use wasm_bindgen::Clamped;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, ImageData, OffscreenCanvas};
-use crate::phtheirichthys::{BoatOptions, Phtheirichthys, SnakeParams, SnakeResult};
+use crate::phtheirichthys::{BoatOptions, Phtheirichthys, SnakeParams, Snake};
 use crate::polar::Polar;
 use crate::position::{Coords, Heading, BoatStatus};
 use crate::race::Race;
@@ -95,7 +95,7 @@ pub fn draw_wind(provider: String, canvas: OffscreenCanvas, m: js_sys::Date, x: 
 }
 
 #[wasm_bindgen]
-pub fn eval_snake(route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<SnakeResult, JsValue> {
+pub fn eval_snake(route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<Snake, JsValue> {
     match PHTHEIRICHTHYS.read().unwrap().eval_snake(route_request, params, heading) {
         Ok(res) => Ok(res),
         Err(e) => {
