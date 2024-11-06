@@ -51,7 +51,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
         let boat_options = Arc::new(boat_options);
 
-        let max_duration: Duration = Duration::hours(20*24); //Duration::minutes(25); //
+        let max_duration: Duration = Duration::hours(120*24); //Duration::minutes(25); //
 
         let steps = request.steps.clone();
 
