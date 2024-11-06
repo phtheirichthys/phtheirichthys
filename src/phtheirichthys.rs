@@ -95,7 +95,7 @@ impl Phtheirichthys {
 
     pub(crate) fn eval_snake(&self, route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<Snake> {
         Ok(Snake {
-            heading: self.eval_snake_heading(&route_request, &params, &heading, |_, twd| Heading::TWA(heading.twa(twd).round()))?,
+            heading: self.eval_snake_heading(&route_request, &params, &heading, |_, twd| Heading::TWA(heading.twa(twd)))?,
             twa: self.eval_snake_heading(&route_request, &params, &heading, |twa, _| twa)?,
         })
     }
