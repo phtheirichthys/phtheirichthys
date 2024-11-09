@@ -70,6 +70,16 @@ pub struct Race {
     pub(crate) buoys: Vec<Buoy>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ice_limits: Option<Limits>,
+    pub(crate) restricted_zones: Vec<RestrictedZone>
+}
+
+#[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub(crate) struct RestrictedZone {
+    name: String,
+    color: Option<String>,
+    vertices: Vec<Coords>,
+    bbox: [f64; 4]
 }
 
 #[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
