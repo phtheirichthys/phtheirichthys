@@ -161,7 +161,7 @@ impl NoaaWindProvider {
         info!("Load Noaa Wind forecasts");
 
         let client = reqwest::Client::new();
-        let url = Url::parse("http://127.0.0.1:8000")?.join("winds/api/v2/winds/noaa")?;
+        let url = Url::parse(&*config.url)?.join("winds/api/v2/winds/noaa")?;
 
         let response = client.get(url.clone())
             .send()
@@ -428,7 +428,7 @@ impl Reference {
             }
         }
 
-        let url = Url::parse("http://127.0.0.1:8000")?.join(&format!("winds/api/v2/winds/noaa/{}/{}", self.ref_time.format("%Y%m%d%H"), self.forecast_time.format("%Y%m%d%H")))?;
+        let url = Url::parse(&*config.url)?.join(&format!("winds/api/v2/winds/noaa/{}/{}", self.ref_time.format("%Y%m%d%H"), self.forecast_time.format("%Y%m%d%H")))?;
         let client = reqwest::Client::new();
 
         debug!("Download from url {}", url);
