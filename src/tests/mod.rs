@@ -1,15 +1,29 @@
-use chrono::Duration;
+use chrono::{Duration, Utc};
 use env_logger::Env;
 use log::{debug, error, info};
 
-use crate::{phtheirichthys::{BoatOptions, Phtheirichthys, SnakeParams}, position::Heading, race::Race};
-use crate::position::BoatStatus;
+use crate::{phtheirichthys::{BoatOptions, Phtheirichthys, SnakeParams}, position::Heading, race::Race, wind};
+use crate::position::{BoatStatus, Coords};
 use crate::router::RouteRequest;
 use crate::utils::Speed;
+use crate::wind::providers::config::{NoaaProviderConfig, ProviderConfig};
 use crate::wind::Wind;
 
 fn init() {
     let _ = env_logger::Builder::from_env(Env::default().default_filter_or("debug")).is_test(true).try_init();
+}
+
+#[tokio::test]
+async fn noaa() {
+    env_logger::init();
+
+    debug!("Testing Noaa ...");
+
+    let providers = wind::providers::Providers::new();
+    providers.init_provider(ProviderConfig::Noaa(NoaaProviderConfig { url: "http://127.0.0.1:8000".to_string() })).await;
+
+    let wind = providers.get("noaa".to_string()).unwrap().find(&Utc::now());
+    debug!("interpolate ( lat: -6.751896464843375, lon: -0.17578125 ) : {}", wind.interpolate(&Coords { lat: -6.751896464843375, lon: -0.17578125 }));
 }
 
 #[tokio::test]
@@ -20,7 +34,7 @@ async fn echeneis() {
 
     let phtheirichthys = Phtheirichthys::new();
 
-    phtheirichthys.add_wind_provider().await;
+    phtheirichthys.add_wind_provider("vr".to_string()).await;
     phtheirichthys.add_land_provider().await;
 
     while phtheirichthys.get_wind_provider_status("vr".to_string()).is_err() {
@@ -110,7 +124,7 @@ async fn snake() {
 
     let phtheirichthys = Phtheirichthys::new();
 
-    phtheirichthys.add_wind_provider().await;
+    phtheirichthys.add_wind_provider("vr".to_string()).await;
     phtheirichthys.add_land_provider().await;
 
     while phtheirichthys.get_wind_provider_status("vr".to_string()).is_err() {

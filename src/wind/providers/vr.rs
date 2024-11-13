@@ -8,7 +8,7 @@ use anyhow::{bail, Result};
 use byteorder::ReadBytesExt;
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use chrono::serde::ts_seconds;
-use clokwerk::{AsyncScheduler, Job, TimeUnits};
+use clokwerk::{AsyncScheduler, Job};
 use futures_util::future::ready;
 #[cfg(feature = "wasm")]
 use gloo::timers::callback::Interval;
@@ -17,7 +17,6 @@ use reqwest::Url;
 use serde::Deserialize;
 #[cfg(feature = "tokio")]
 use tokio::task::spawn_local;
-use futures_util::stream::StreamExt;
 
 use crate::wind::ProviderStatus;
 use crate::{position::Coords, utils::Speed, wind::{vector_to_degrees, InstantWind, Provider, Wind}};

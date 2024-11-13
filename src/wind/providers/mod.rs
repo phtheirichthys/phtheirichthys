@@ -5,7 +5,8 @@ use chrono::{DateTime, Utc};
 use log::{debug, error, info};
 
 use crate::position::Coords;
-
+use crate::wind::providers::config::ProviderConfig::Noaa;
+use crate::wind::providers::noaa::NoaaWindProvider;
 use self::config::ProviderConfig;
 
 use super::{Provider, ProviderStatus, Wind};
@@ -13,6 +14,7 @@ use super::{Provider, ProviderStatus, Wind};
 pub(crate) mod config;
 mod storage;
 pub(crate) mod vr;
+pub(crate) mod noaa;
 
 pub(crate) struct Providers {
     providers: Arc<RwLock<HashMap<String, Arc<dyn Provider + Sync + Send>>>>,
@@ -26,19 +28,26 @@ impl Providers {
 
     }
 
-    pub(crate) async fn init_provider(&self, config: &ProviderConfig) -> Result<()> {
-        info!("Init provider");
+    pub(crate) async fn init_provider(&self, config: ProviderConfig) -> Result<()> {
+        info!("Init provider {:?}", config);
 
         match config {
-            ProviderConfig::Noaa(_) => todo!(),
-            // ProviderConfig::Noaa(config) => {
-            //     let noaa = Noaa::from_config(config);
-            //     // let winds = noaa.load(true, false).await?;
-            //     //noaa.init().await;
-            //     wasm_bindgen_futures::spawn_local(async move {
-            //       noaa.start().await;
-            //     });        
-            // },
+            Noaa(config) => {
+                let providers = self.providers.clone();
+                //wasm_bindgen_futures::spawn_local(async move {
+                match NoaaWindProvider::new(config).await {
+                    Ok(noaa) => {
+                        noaa.start();
+
+                        let mut providers: std::sync::RwLockWriteGuard<HashMap<String, Arc<dyn Provider + Sync + Send>>> = providers.write().unwrap();
+                        providers.insert("noaa".into(), Arc::new(noaa));
+                    },
+                    Err(e) => {
+                        error!("Failed starting noaa wind provider : {}", e);
+                    }
+                }
+                //});
+            },
             ProviderConfig::Vr => {
                 let providers = self.providers.clone();
                 //wasm_bindgen_futures::spawn_local(async move {

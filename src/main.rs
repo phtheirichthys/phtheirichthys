@@ -33,7 +33,7 @@ async fn main() {
 
     let phtheirichthys = Phtheirichthys::new();
 
-    phtheirichthys.add_wind_provider().await;
+    phtheirichthys.add_wind_provider("vr".to_string()).await;
     phtheirichthys.add_land_provider().await;
 
     while phtheirichthys.get_wind_provider_status("vr".to_string()).is_err() {

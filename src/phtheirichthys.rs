@@ -2,9 +2,10 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 
 use chrono::{DateTime, Duration, Utc};
+#[cfg(feature = "webgl")]
 use cubecl::prelude::*;
 // use gloo::timers::callback::Timeout;
-use log::error;
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
@@ -43,9 +44,9 @@ impl Phtheirichthys {
         }
     }
 
-    pub async fn add_wind_provider(&self) {
-        //self.providers.init_provider(&ProviderConfig::Noaa(NoaaProviderConfig { enabled: true, gribs: StorageConfig::WebSys { prefix: "__".into() } }));
-        match self.wind_providers.init_provider(&ProviderConfig::Vr).await {
+    pub async fn add_wind_provider(&self, provider: String) {
+        info!("add wind provider {}", provider);
+        match self.wind_providers.init_provider(provider.as_str().into()).await {
             Ok(()) => {},
             Err(e) => error!("Failed adding provider : {}", e)
         }
@@ -142,7 +143,8 @@ impl Phtheirichthys {
                 &start,
                 &from,
                 &None,
-                &twa, Duration::hours(1), &wind, 1.0, true
+                &twa, Duration::hours(1), &wind, 1.0, true,
+                |_| false
             );
 
             let jump = jump.iter().map(|(_, pos)| pos).max_by_key(|pos| &pos.distance).unwrap().to_owned();
@@ -217,6 +219,7 @@ impl Phtheirichthys {
         Ok(result)
     }
 
+    #[cfg(feature = "webgl")]
     fn launch<R: Runtime>(device: &R::Device) {
 
         let start = Utc::now();
@@ -278,6 +281,7 @@ impl Phtheirichthys {
         println!("Executed loop in {:?}ns", (Utc::now() - start).num_nanoseconds());
     }
 
+    #[cfg(feature = "webgl")]
     pub fn test_webgpu(&self) -> Result<()> {
         Self::launch::<cubecl::wgpu::WgpuRuntime>(&Default::default());
 
@@ -294,7 +298,7 @@ impl Phtheirichthys {
         //     wasm_bindgen_futures::spawn_local(async move {
                 let router = Echeneis::new("".to_string(), polar, wind_provider, lands_provider, algorithm, EcheneisConfig { accuracy: 1.0, display_all_isochrones: false, timeout: 60 });
 
-                match router.route(&race, boat_options, request, None).await {
+                match router.route(race, boat_options, request, None).await {
                     Ok(result) => {
                         Ok(result)
                     },
@@ -311,7 +315,6 @@ impl Phtheirichthys {
         let wind_provider = self.wind_providers.get(wind_provider)?;
         let polar = self.polars.get(&polar_id)?;
         let lands_provider = Arc::new(VrLandProvider::new()?);
-        let algorithm = std::sync::Arc::new(crate::algorithm::spherical::Spherical{});
 
         let instant_wind = wind_provider.find(&request.start_time);
         let wind = instant_wind.interpolate(&request.from);

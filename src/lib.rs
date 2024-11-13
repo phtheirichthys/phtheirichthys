@@ -1,5 +1,7 @@
 // #![feature(btree_extract_if)]
 
+extern crate core;
+
 pub(crate) mod algorithm;
 pub(crate) mod land;
 pub mod phtheirichthys;

@@ -43,11 +43,18 @@ pub(crate) struct EcheneisConfig {
 #[async_trait]
 impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
-    async fn route(&self, race: &Race, boat_options: BoatOptions, request: RouteRequest, routing_timeout: Option<Duration>) -> Result<RouteResult> {
+    async fn route(&self, race: Race, boat_options: BoatOptions, request: RouteRequest, routing_timeout: Option<Duration>) -> Result<RouteResult> {
 
         let start_routing = Utc::now();
 
         debug!("Route asked : {:?}", request);
+
+        let mut race = race;
+        race.restricted_zones.iter_mut().for_each(|zone| zone.compute());
+
+        let race = Arc::new(race);
+
+        info!("Route asked on race : {:?}", race);
 
         let boat_options = Arc::new(boat_options);
 
@@ -79,7 +86,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
         let mut deb = Vec::new();
 
-        let mut buoys = get_buoys(race, from.clone()).peekable();
+        let mut buoys = get_buoys(race.clone(), from.clone()).peekable();
         let mut max = BTreeMap::new();
 
         while let Some(mut destination) = buoys.next() {
@@ -127,7 +134,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
                 // let mut navs = match timeout(
                     // std::time::Duration::from_secs(self.config.timeout),
-                let mut navs = self.navigate2(&boat_options, &from, &now, froms, &mut destination, step.clone(), factor, &mut max, &max_radius, future_navs.to_owned()).await;
+                let mut navs = self.navigate2(race.clone(), &boat_options, &from, &now, froms, &mut destination, step.clone(), factor, &mut max, &max_radius, future_navs.to_owned()).await;
                 // ).await {
                 //     Err(_) => {
                 //         bail!("timeout while navigate");
@@ -365,7 +372,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         }
     }
 
-    pub(crate) fn jump2(algorithm: &Arc<A>,
+    pub(crate) fn jump2<F: Fn(&Coords) -> bool>(algorithm: &Arc<A>,
                         lands_provider: Option<&Arc<Box<dyn LandsProvider + Send + Sync>>>,
                         polar: &mut PolarCache,
                         boat_options: &Arc<BoatOptions>,
@@ -376,7 +383,9 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
                         duration: Duration,
                         wind: &Wind,
                         factor: f64,
-                        snake: bool,) -> Vec<(i32, Position)> {
+                        snake: bool,
+                        is_in_ice_limits_or_restricted_zone: F,
+                        ) -> Vec<(i32, Position)> {
 
         let twa = heading.twa(wind.direction);
         if !snake && (twa.abs() < 30.0 || twa.abs() > 160.0) {
@@ -413,6 +422,8 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
 
             let dist_to = to.as_ref().map_or(Distance::zero(), |to| to.distance(&point));
 
+            let is_in_ice_limits = is_in_ice_limits_or_restricted_zone(&point);
+
             let az = (az * factor).round() as i32;
             Some((az, Position {
                 az,
@@ -439,11 +450,26 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
                     stamina,
                 },
                 previous: Some(from.clone()),
-                is_in_ice_limits: false, //TODO manage ice
+                is_in_ice_limits,
                 remaining_penalties,
                 remaining_stamina,
             }))
         }).filter(|alt| alt.is_some()).map(|alt| alt.unwrap()).collect()
+    }
+
+    fn is_in_ice_limits_or_restricted_zone(race: &Race, point: &Coords) -> bool {
+        match &race.ice_limits {
+            Some(limits) => if limits.is_in(point) {
+                return true
+            }
+            _ => {}
+        }
+
+        for zone in race.restricted_zones.iter() {
+            if zone.is_in(point) { return true }
+        }
+
+        false
     }
 
     fn buoy_reached(algorithm: &Arc<A>, polar: &mut PolarCache, boat_options: &Arc<BoatOptions>, start: &Arc<Coords>, from: &Arc<Position>, to: &Arc<Buoy>, duration: Duration, wind: &Wind, factor: f64) -> Option<(i32, Position)> {
@@ -519,6 +545,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
 
     fn way2(algorithm: Arc<A>,
             lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>,
+            race: &Arc<Race>,
             polar: &mut PolarCache,
             boat_options: Arc<BoatOptions>,
             start: Arc<Coords>,
@@ -560,7 +587,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         // } else {
             for twa in -180..180 {
                 let heading = Heading::TWA(twa as f64);
-                let positions = Self::jump2(&algorithm, Some(&lands_provider), polar, &boat_options, &start, &from, to, &heading, duration, wind, factor, false);
+                let positions = Self::jump2(&algorithm, Some(&lands_provider), polar, &boat_options, &start, &from, to, &heading, duration, wind, factor, false, |point| Self::is_in_ice_limits_or_restricted_zone(race, &point));
 
                 for (az, pos) in positions {
                     let nav = if pos.duration.relative == duration { &mut default_nav } else { navs.entry(pos.duration.absolute).or_insert_with(|| Nav::from(pos.duration.absolute)) };
@@ -582,7 +609,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
             }
         // }
 
-        let mut navs = if navs.len() > 0 {
+        let navs = if navs.len() > 0 {
             let mut navs = navs.iter().map(|(_, nav)| nav.to_owned()).collect::<Vec<Nav>>();
             navs.push(default_nav);
             navs.sort_by(|a, b| a.absolute_duration.cmp(&b.absolute_duration));
@@ -593,7 +620,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         navs
     }
 
-    async fn navigate2(&self, boat_options: &Arc<BoatOptions>, start: &Coords, now: &DateTime<Utc>, from: Nav, to: &mut Buoy, duration: Duration, factor: f64, max: &mut BTreeMap<i32, [Distance;8]>, max_radius: &Distance, navs: VecDeque<Nav>) -> VecDeque<Nav> {
+    async fn navigate2(&self, race: Arc<Race>, boat_options: &Arc<BoatOptions>, start: &Coords, now: &DateTime<Utc>, from: Nav, to: &mut Buoy, duration: Duration, factor: f64, max: &mut BTreeMap<i32, [Distance;8]>, max_radius: &Distance, navs: VecDeque<Nav>) -> VecDeque<Nav> {
 
         let navs = Arc::new(Mutex::new(navs.into_iter().map(|nav| (nav.absolute_duration, nav)).collect::<HashMap<Duration, Nav>>()));
 
@@ -604,7 +631,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         let boat_options = boat_options.clone();
         let start = Arc::new(start.clone());
 
-        Self::navigate_from_all(from, to, duration, factor, &navs, winds, algorithm, lands_provider, polar, boat_options, start).await;
+        Self::navigate_from_all(from, to, duration, factor, &navs, winds, algorithm, lands_provider, race, polar, boat_options, start).await;
 
         let navs = navs.lock().unwrap();
         debug!("{:?}", navs.keys());
@@ -761,7 +788,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
     }
 
     #[cfg(feature = "rayon")]
-    async fn navigate_from_all(from: Nav, to: &mut Buoy, duration: Duration, factor: f64, navs: &Arc<Mutex<HashMap<Duration, Nav>>>, winds: Arc<Box<dyn InstantWind + Send + Sync>>, algorithm: Arc<A>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, polar: Arc<Polar>, boat_options: Arc<BoatOptions>, start: Arc<Coords>) {
+    async fn navigate_from_all(from: Nav, to: &mut Buoy, duration: Duration, factor: f64, navs: &Arc<Mutex<HashMap<Duration, Nav>>>, winds: Arc<Box<dyn InstantWind + Send + Sync>>, algorithm: Arc<A>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, race: Arc<Race>, polar: Arc<Polar>, boat_options: Arc<BoatOptions>, start: Arc<Coords>) {
         let (send, recv) = tokio::sync::oneshot::channel();
         {
             let navs = navs.clone();
@@ -770,7 +797,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
 
             rayon::spawn(move || {
                 from.alternatives.par_iter().for_each(|(_, alternative)| {
-                    Self::navigate_from_alternative(duration, factor, algorithm.clone(), lands_provider.clone(), polar.clone(), boat_options.clone(), start.clone(), navs.clone(), winds.clone(), to.clone(), alternative);
+                    Self::navigate_from_alternative(duration, factor, algorithm.clone(), lands_provider.clone(), race.clone(), polar.clone(), boat_options.clone(), start.clone(), navs.clone(), winds.clone(), to.clone(), alternative);
                 });
 
                 let _ = send.send(());
@@ -781,17 +808,17 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
     }
 
     #[cfg(not(feature = "rayon"))]
-    async fn navigate_from_all(from: Nav, to: &mut Buoy, duration: Duration, factor: f64, navs: &Arc<Mutex<HashMap<Duration, Nav>>>, winds: Arc<Box<dyn InstantWind + Send + Sync>>, algorithm: Arc<A>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, polar: Arc<Polar>, boat_options: Arc<BoatOptions>, start: Arc<Coords>) {
+    async fn navigate_from_all(from: Nav, to: &mut Buoy, duration: Duration, factor: f64, navs: &Arc<Mutex<HashMap<Duration, Nav>>>, winds: Arc<Box<dyn InstantWind + Send + Sync>>, algorithm: Arc<A>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, race: Arc<Race>, polar: Arc<Polar>, boat_options: Arc<BoatOptions>, start: Arc<Coords>) {
         let navs = navs.clone();
         let winds = winds.clone();
         let to = Arc::new(to.clone());
 
         from.alternatives.iter().for_each(|(_, alternative)| {
-            Self::navigate_from_alternative(duration, factor, algorithm.clone(), lands_provider.clone(), polar.clone(), boat_options.clone(), start.clone(), navs.clone(), winds.clone(), to.clone(), alternative);
+            Self::navigate_from_alternative(duration, factor, algorithm.clone(), lands_provider.clone(), race.clone(), polar.clone(), boat_options.clone(), start.clone(), navs.clone(), winds.clone(), to.clone(), alternative);
         });
     }
 
-    fn navigate_from_alternative(duration: Duration, factor: f64, algorithm: Arc<A>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, polar: Arc<Polar>, boat_options: Arc<BoatOptions>, start: Arc<Coords>, navs: Arc<Mutex<HashMap<Duration, Nav>>>, winds: Arc<Box<dyn InstantWind + Send + Sync>>, to: Arc<Buoy>, alternative: &Alternative) {
+    fn navigate_from_alternative(duration: Duration, factor: f64, algorithm: Arc<A>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, race: Arc<Race>, polar: Arc<Polar>, boat_options: Arc<BoatOptions>, start: Arc<Coords>, navs: Arc<Mutex<HashMap<Duration, Nav>>>, winds: Arc<Box<dyn InstantWind + Send + Sync>>, to: Arc<Buoy>, alternative: &Alternative) {
         let mut polar = PolarCache::new(polar);
 
         alternative.variants.iter().for_each(|variant| {
@@ -807,7 +834,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
 
                 let wind = winds.interpolate(&variant.point);
 
-                let way_navs = Self::way2(algorithm, lands_provider, &mut polar, boat_options, start, Arc::new(variant.clone()), &Some(to), duration, &wind, factor);
+                let way_navs = Self::way2(algorithm, lands_provider, &race, &mut polar, boat_options, start, Arc::new(variant.clone()), &Some(to), duration, &wind, factor);
 
                 for way_nav in way_navs {
                     if way_nav.reached_by_way {
@@ -1251,7 +1278,7 @@ impl From<RouteRequest> for Position {
 }
 
 
-fn get_buoys(race: &Race, boat: Coords) -> impl Iterator<Item = Buoy> {
+fn get_buoys(race: Arc<Race>, boat: Coords) -> impl Iterator<Item = Buoy> {
     let w = race.buoys.clone();
     w.into_iter().filter(|w| !w.is_validated())
         .map(move |w| Buoy::from(w, boat.clone()))

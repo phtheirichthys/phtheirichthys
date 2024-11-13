@@ -25,8 +25,8 @@ fn run() {
 }
 
 #[wasm_bindgen]
-pub async fn add_wind_provider() {
-    PHTHEIRICHTHYS.read().unwrap().add_wind_provider().await;
+pub async fn add_wind_provider(provider: String) {
+    PHTHEIRICHTHYS.read().unwrap().add_wind_provider(provider).await;
 }
 
 #[wasm_bindgen]
@@ -130,6 +130,7 @@ pub async fn status(wind_provider: String, polar_id: String, boat_options: BoatO
     }
 }
 
+#[cfg(feature = "webgl")]
 #[wasm_bindgen]
 pub fn test_webgpu() -> Result<(), JsValue> {
     debug!("> test_webgpu");

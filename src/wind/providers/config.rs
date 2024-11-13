@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use super::storage::StorageConfig;
-
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ProviderConfig {
@@ -11,9 +9,16 @@ pub enum ProviderConfig {
   Vr,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+impl From<&str> for ProviderConfig {
+  fn from(value: &str) -> Self {
+    match value {
+      "noaa" => Self::Noaa(NoaaProviderConfig { url: "https://winds.phtheirichthys.fr".to_string() }),
+      "vr" | _ => Self::Vr,
+    }
+  }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NoaaProviderConfig {
-  pub enabled: bool,
-//   pub init: Option<DateTime<Utc>>,
-  pub gribs: StorageConfig,
+  pub(crate) url: String,
 }
