@@ -203,9 +203,11 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
                         // TODO : arrived
                         // Search for better route (cross line / cross circle)
                         reached = true
-                    }
 
-                    let reached = nav.reached_by_way || nav.crossed && navs.iter().map(|nav| nav.size()).sum::<usize>() == 0;
+                    } else {
+
+                        reached = nav.reached_by_way || nav.crossed && navs.iter().map(|nav| nav.size()).sum::<usize>() == 0;
+                    }
 
                     now = request.start_time + duration;
                     froms = nav;
