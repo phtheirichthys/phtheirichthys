@@ -149,7 +149,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
                 if let Some(nav) = navs.pop_front() {
 
-                    reached = nav.reached_by_way;
+                    reached = nav.reached_by_way || nav.crossed && nav.size() + navs.iter().map(|nav| nav.size()).sum::<usize>() == 0;
                     duration = nav.absolute_duration;
 
                     // Generate isochrone for ui
@@ -203,10 +203,6 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
                         // TODO : arrived
                         // Search for better route (cross line / cross circle)
                         reached = true
-
-                    } else {
-
-                        reached = nav.reached_by_way || nav.crossed && navs.iter().map(|nav| nav.size()).sum::<usize>() == 0;
                     }
 
                     now = request.start_time + duration;
