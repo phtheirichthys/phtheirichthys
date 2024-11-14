@@ -205,7 +205,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
                         reached = true
                     }
 
-                    let reached = nav.reached_by_way;
+                    let reached = nav.reached_by_way || nav.crossed && navs.iter().map(|nav| nav.size()).sum::<usize>() == 0;
 
                     now = request.start_time + duration;
                     froms = nav;
