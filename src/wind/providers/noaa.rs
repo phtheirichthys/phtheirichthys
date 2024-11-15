@@ -8,7 +8,7 @@ use anyhow::{bail, Result};
 use byteorder::ReadBytesExt;
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use chrono::serde::ts_seconds;
-use clokwerk::{AsyncScheduler, Job};
+use clokwerk::{AsyncScheduler, Job, TimeUnits};
 use futures_util::future::ready;
 #[cfg(feature = "wasm")]
 use gloo::timers::callback::Interval;
@@ -161,7 +161,7 @@ impl NoaaWindProvider {
         info!("Load Noaa Wind forecasts");
 
         let client = reqwest::Client::new();
-        let url = Url::parse(&*config.url)?.join("winds/api/v2/winds/noaa")?;
+        let url: Url = Url::parse(&*config.url)?.join("winds/api/v2/winds/noaa")?;
 
         let response = client.get(url.clone())
             .send()
@@ -189,6 +189,10 @@ impl NoaaWindProvider {
                         false
                     }
                 });
+
+                for forecasts in forecasts.forecasts.iter_mut() {
+                    forecasts.references.drain(1..);
+                }
 
                 Ok(forecasts)
             }

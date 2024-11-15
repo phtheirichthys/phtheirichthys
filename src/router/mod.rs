@@ -19,7 +19,7 @@ pub(crate) mod echeneis;
 
 #[async_trait]
 pub(crate) trait Router {
-  async fn route(&self, race: Race, boat_options: BoatOptions, request: RouteRequest, timeout: Option<Duration>) -> Result<RouteResult>;
+  async fn route(&self, race: Race, boat_options: BoatOptions, request: RouteRequest, boat_status: BoatStatus, timeout: Option<Duration>) -> Result<RouteResult>;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Tsify)]
@@ -29,7 +29,7 @@ pub struct RouteRequest {
   #[tsify(type = "Date")]
   pub start_time: DateTime<Utc>,
   pub boat_settings: BoatSettings,
-  pub status: BoatStatus,
+  //pub status: BoatStatus,
   #[serde(skip, default = "default_steps")]
   pub steps: Vec<(Duration, Duration)>,
 }

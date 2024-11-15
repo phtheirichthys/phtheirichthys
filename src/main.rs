@@ -86,18 +86,6 @@ async fn main() {
         from: Default::default(),
         start_time: Default::default(),
         boat_settings: Default::default(),
-        status: BoatStatus {
-            aground: false,
-            boat_speed: Speed::from_kts(0f64),
-            wind: Wind { direction: 0.0, speed: Default::default() },
-            foil: 0,
-            boost: 0,
-            best_ratio: 0.0,
-            ratio: 0,
-            vmgs: None,
-            penalties: Default::default(),
-            stamina: 0.0,
-        },
         steps: vec![
             // (Duration::minutes(30), Duration::minutes(1)),
             // (Duration::hours(1),    Duration::minutes(5)),

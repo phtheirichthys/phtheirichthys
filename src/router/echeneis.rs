@@ -43,7 +43,7 @@ pub(crate) struct EcheneisConfig {
 #[async_trait]
 impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
-    async fn route(&self, race: Race, boat_options: BoatOptions, request: RouteRequest, routing_timeout: Option<Duration>) -> Result<RouteResult> {
+    async fn route(&self, race: Race, boat_options: BoatOptions, request: RouteRequest, boat_status: BoatStatus, routing_timeout: Option<Duration>) -> Result<RouteResult> {
 
         let start_routing = Utc::now();
 
@@ -63,12 +63,12 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
         let steps = request.steps.clone();
 
         let start = request.start_time;
-
+        
         let mut from = request.from.clone();
         let mut froms = Nav {
             absolute_duration: Duration::zero(),
             min: None,
-            alternatives: BTreeMap::from([(0, request.clone().into())]),
+            alternatives: BTreeMap::from([(0, (request.clone(), boat_status).into())]),
             reached_by_way: false,
             crossed: false,
         };
@@ -92,6 +92,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
         while let Some(mut destination) = buoys.next() {
 
             let mut reached = false;
+            let mut crossed = false;
             let min = destination.distance(&from);
             let max_radius = if min.clone() / 1000.0 < Distance::from_nm(1000.0) {
                 min.clone() * 1.5
@@ -149,7 +150,9 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
                 if let Some(nav) = navs.pop_front() {
 
-                    reached = nav.reached_by_way || nav.crossed && nav.size() + navs.iter().map(|nav| nav.size()).sum::<usize>() == 0;
+                    crossed = crossed || nav.crossed;
+
+                    reached = nav.reached_by_way || crossed && nav.size() + navs.iter().map(|nav| nav.size()).sum::<usize>() == 0;
                     duration = nav.absolute_duration;
 
                     // Generate isochrone for ui
@@ -199,7 +202,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
                     }
 
                     // Is boat arrived
-                    if nav.crossed && buoys.peek().is_none() {
+                    if crossed && buoys.peek().is_none() {
                         // TODO : arrived
                         // Search for better route (cross line / cross circle)
                         reached = true
@@ -396,7 +399,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
                                                 &from.settings.sail, &polar_result.sail,
                                                 &wind.speed
             );
-
+            
             let mut jump_duration = duration;
             if penalties.duration() > duration {
                 jump_duration = jump_duration * ((penalties.duration().num_minutes() as f64 / jump_duration.num_minutes() as f64).ceil() as i32);
@@ -1131,12 +1134,12 @@ impl Alternative {
     }
 }
 
-impl From<RouteRequest> for Alternative {
-    fn from(route_request: RouteRequest) -> Self {
+impl From<(RouteRequest, BoatStatus)> for Alternative {
+    fn from((route_request, boat_status): (RouteRequest, BoatStatus)) -> Self {
 
         let mut variants = [None, None, None, None, None, None, None, None];
         let sail_index = route_request.boat_settings.sail.index;
-        variants[sail_index] = Some(route_request.into());
+        variants[sail_index] = Some((route_request, boat_status).into());
 
         Alternative {
             variants
@@ -1254,8 +1257,8 @@ impl Position {
     }
 }
 
-impl From<RouteRequest> for Position {
-    fn from(route_request: RouteRequest) -> Self {
+impl From<(RouteRequest, BoatStatus)> for Position {
+    fn from((route_request, boat_status): (RouteRequest, BoatStatus)) -> Self {
 
         Position {
             az: 0,
@@ -1266,11 +1269,11 @@ impl From<RouteRequest> for Position {
             distance: Distance::zero(),
             reached: None,
             settings: route_request.boat_settings.clone(),
-            status: route_request.status.clone(),
+            status: boat_status.clone(),
             previous: None,
             is_in_ice_limits: false,
-            remaining_penalties: route_request.status.penalties.clone(),
-            remaining_stamina: route_request.status.stamina,
+            remaining_penalties: boat_status.penalties.clone(),
+            remaining_stamina: boat_status.stamina,
         }
     }
 }

@@ -12,7 +12,7 @@ pub enum ProviderConfig {
 impl From<&str> for ProviderConfig {
   fn from(value: &str) -> Self {
     match value {
-      "noaa" => Self::Noaa(NoaaProviderConfig { url: "https://winds2.phtheirichthys.fr".to_string() }),
+      "noaa" => Self::Noaa(NoaaProviderConfig { url: "http://127.0.0.1:8000".to_string() }),
       "vr" | _ => Self::Vr,
     }
   }

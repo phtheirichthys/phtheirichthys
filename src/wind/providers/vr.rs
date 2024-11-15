@@ -8,7 +8,7 @@ use anyhow::{bail, Result};
 use byteorder::ReadBytesExt;
 use chrono::{DateTime, Duration, DurationRound, Utc};
 use chrono::serde::ts_seconds;
-use clokwerk::{AsyncScheduler, Job};
+use clokwerk::{AsyncScheduler, Job, TimeUnits};
 use futures_util::future::ready;
 #[cfg(feature = "wasm")]
 use gloo::timers::callback::Interval;

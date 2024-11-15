@@ -2,7 +2,7 @@ use chrono::{Duration, Utc};
 use env_logger::Env;
 use log::{debug, error, info};
 
-use crate::{phtheirichthys::{BoatOptions, Phtheirichthys, SnakeParams}, position::Heading, race::Race, wind};
+use crate::{phtheirichthys::{BoatOptions, Phtheirichthys, SnakeParams}, position::{BoatSettings, Heading, Sail}, race::Race, wind};
 use crate::position::{BoatStatus, Coords};
 use crate::router::RouteRequest;
 use crate::utils::Speed;
@@ -87,18 +87,6 @@ async fn echeneis() {
         from: Default::default(),
         start_time: Default::default(),
         boat_settings: Default::default(),
-        status: BoatStatus {
-            aground: false,
-            boat_speed: Speed::from_kts(0f64),
-            wind: Wind { direction: 0.0, speed: Default::default() },
-            foil: 0,
-            boost: 0,
-            best_ratio: 0.0,
-            ratio: 0,
-            vmgs: None,
-            penalties: Default::default(),
-            stamina: 0.0,
-        },
         steps: vec![
             // (Duration::minutes(30), Duration::minutes(1)),
             // (Duration::hours(1),    Duration::minutes(5)),
@@ -124,14 +112,14 @@ async fn snake() {
 
     let phtheirichthys = Phtheirichthys::new();
 
-    phtheirichthys.add_wind_provider("vr".to_string()).await;
+    phtheirichthys.add_wind_provider("noaa".to_string()).await;
     phtheirichthys.add_land_provider().await;
 
-    while phtheirichthys.get_wind_provider_status("vr".to_string()).is_err() {
+    while phtheirichthys.get_wind_provider_status("noaa".to_string()).is_err() {
         tokio::time::sleep(std::time::Duration::from_secs(3));
     }
 
-    let status = phtheirichthys.get_wind_provider_status("vr".to_string()).unwrap();
+    let status = phtheirichthys.get_wind_provider_status("noaa".to_string()).unwrap();
 
     debug!("Status : {:?}", status.current_ref_time);
 
@@ -149,19 +137,7 @@ async fn snake() {
     let request = RouteRequest {
         from: Default::default(),
         start_time: Default::default(),
-        boat_settings: Default::default(),
-        status: BoatStatus {
-            aground: false,
-            boat_speed: Speed::from_kts(0f64),
-            wind: Wind { direction: 0.0, speed: Default::default() },
-            foil: 0,
-            boost: 0,
-            best_ratio: 0.0,
-            ratio: 0,
-            vmgs: None,
-            penalties: Default::default(),
-            stamina: 0.0,
-        },
+        boat_settings: BoatSettings { heading: Heading::HEADING(182.0), sail: Sail { index: 7, id: 6, auto: true } },
         steps: vec![
             // (Duration::minutes(30), Duration::minutes(1)),
             // (Duration::hours(1),    Duration::minutes(5)),
@@ -173,21 +149,21 @@ async fn snake() {
         ],
     };
 
-    for a in 0..360 {
+    for a in 182..183 {
         let boat_options = BoatOptions {
-            lt: false,
-            gt: false,
-            code0: false,
-            foil: false,
-            hull: false,
-            winch: false,
+            lt: true,
+            gt: true,
+            code0: true,
+            foil: true,
+            hull: true,
+            winch: true,
             stamina: true,
         };
 
         let params = SnakeParams {
             max_duration: 48,
             polar: "19".to_string(),
-            wind_provider: "vr".to_string(),
+            wind_provider: "noaa".to_string(),
             boat_options,
         };
 

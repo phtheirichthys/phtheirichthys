@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use std::{collections::HashMap, f64::consts::PI, sync::{Arc, RwLock}};
-
+use std::sync::LockResult;
 use config::ProviderConfig;
 use log::{debug, error, info};
 
@@ -10,7 +10,7 @@ pub(crate) mod config;
 pub(crate) mod vr;
 
 pub(crate) struct Providers {
-    providers: Arc<RwLock<HashMap<String, Arc<Box<dyn LandsProvider + Sync + Send>>>>>,
+    pub(crate) providers: Arc<RwLock<HashMap<String, Arc<Box<dyn LandsProvider + Sync + Send>>>>>,
 }
 
 impl Providers {
@@ -59,6 +59,22 @@ impl Providers {
         }
     }
 
+    pub(crate) fn get(&self, provider: String) -> Result<Arc<Box<dyn LandsProvider + Sync + Send>>> {
+
+        let providers: std::sync::RwLockReadGuard<HashMap<String, Arc<Box<dyn LandsProvider + Sync + Send>>>> = match self.providers.read() {
+            Ok(providers) => providers,
+            Err(e) => bail!("Failed starting vr land provider : {}", e)
+        };
+
+        match providers.get(&provider) {
+            Some(provider) => {
+                Ok(provider.clone())
+            },
+            None => {
+                bail!("Provider not found")
+            },
+        }
+    }
 }
 
 pub(crate) trait LandsProvider {

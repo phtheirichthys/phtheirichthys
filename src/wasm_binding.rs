@@ -114,7 +114,6 @@ pub fn add_polar(name: String, polar: Polar) -> Result<(), JsValue> {
 
 #[wasm_bindgen]
 pub async fn navigate(wind_provider: String, polar_id: String, race: Race, boat_options: BoatOptions, request: RouteRequest) -> Result<RouteResult, JsValue> {
-    debug!("navigate");
     match PHTHEIRICHTHYS.read().unwrap().navigate(wind_provider, polar_id, race, boat_options, request).await {
         Ok(result) => Ok(result),
         Err(e) => Err(js_sys::Error::new(&e.to_string()))?,
@@ -123,8 +122,7 @@ pub async fn navigate(wind_provider: String, polar_id: String, race: Race, boat_
 
 #[wasm_bindgen]
 pub async fn status(wind_provider: String, polar_id: String, boat_options: BoatOptions, request: RouteRequest) -> Result<BoatStatus, JsValue> {
-    debug!("status");
-    match PHTHEIRICHTHYS.read().unwrap().status(wind_provider, polar_id, boat_options, request).await {
+    match PHTHEIRICHTHYS.read().unwrap().status(wind_provider, polar_id, &boat_options, &request) {
         Ok(result) => Ok(result),
         Err(e) => Err(js_sys::Error::new(&e.to_string()))?,
     }

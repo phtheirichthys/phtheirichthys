@@ -5,7 +5,7 @@ use chrono::{DateTime, Duration, Utc};
 #[cfg(feature = "webgl")]
 use cubecl::prelude::*;
 // use gloo::timers::callback::Timeout;
-use log::{error, info};
+use log::{error, info, debug};
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
@@ -95,13 +95,15 @@ impl Phtheirichthys {
     }
 
     pub(crate) fn eval_snake(&self, route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<Snake> {
+        let status = self.status(params.wind_provider.clone(), params.polar.clone(), &params.boat_options, &route_request)?;
+
         Ok(Snake {
-            heading: self.eval_snake_heading(&route_request, &params, &heading, |_, twd| Heading::TWA(heading.twa(twd)))?,
-            twa: self.eval_snake_heading(&route_request, &params, &heading, |twa, _| twa)?,
+            heading: self.eval_snake_heading(&route_request, &params, &heading, &status, |_, twd| Heading::TWA(heading.twa(twd)))?,
+            twa: self.eval_snake_heading(&route_request, &params, &heading, &status, |twa, _| twa)?,
         })
     }
 
-    pub(crate) fn eval_snake_heading<F>(&self, route_request: &RouteRequest, params: &SnakeParams, heading: &Heading, f: F) -> Result<Vec<RouteWaypoint>> 
+    pub(crate) fn eval_snake_heading<F>(&self, route_request: &RouteRequest, params: &SnakeParams, heading: &Heading, boat_status: &BoatStatus, f: F) -> Result<Vec<RouteWaypoint>>
     where F: Fn(Heading, f64) -> Heading {
         let wind_provider = self.wind_providers.get(params.wind_provider.clone())?;
         let start = Arc::new(route_request.from.clone());
@@ -122,11 +124,11 @@ impl Phtheirichthys {
             distance: Distance::zero(),
             reached: None,
             settings: route_request.boat_settings.clone(),
-            status: route_request.status.clone(),
+            status: boat_status.clone(),
             previous: None,
             is_in_ice_limits: false,
-            remaining_penalties: Penalties::new(),
-            remaining_stamina: route_request.status.stamina,
+            remaining_penalties: boat_status.penalties.clone(),
+            remaining_stamina: boat_status.stamina,
         };
         let mut positions = vec![(src.clone(), false)];
 
@@ -289,16 +291,19 @@ impl Phtheirichthys {
     }
     
     pub async fn navigate(&self, wind_provider: String, polar_id: String, race: Race, boat_options: BoatOptions, request: RouteRequest) -> Result<RouteResult> {
+        let boat_status = self.status(wind_provider.clone(), polar_id.clone(), &boat_options, &request)?;
+
         let wind_provider = self.wind_providers.get(wind_provider)?;
         let polar = self.polars.get(&polar_id)?;
-        let lands_provider = Arc::new(VrLandProvider::new()?);
+        let lands_provider = self.land_providers.get("vr".to_string())?;
+
         let algorithm = std::sync::Arc::new(crate::algorithm::spherical::Spherical{});
 
         // let timeout = Timeout::new(0, move || {
         //     wasm_bindgen_futures::spawn_local(async move {
-                let router = Echeneis::new("".to_string(), polar, wind_provider, lands_provider, algorithm, EcheneisConfig { accuracy: 1.0, display_all_isochrones: false, timeout: 60 });
-
-                match router.route(race, boat_options, request, None).await {
+                let router = Echeneis::new("".to_string(), polar, wind_provider, lands_provider.clone(), algorithm, EcheneisConfig { accuracy: 1.0, display_all_isochrones: false, timeout: 60 });
+        
+                match router.route(race, boat_options, request, boat_status, None).await {
                     Ok(result) => {
                         Ok(result)
                     },
@@ -311,10 +316,10 @@ impl Phtheirichthys {
 
     }
 
-    pub async fn status(&self, wind_provider: String, polar_id: String, boat_options: BoatOptions, request: RouteRequest) -> Result<BoatStatus> {
+    pub fn status(&self, wind_provider: String, polar_id: String, boat_options: &BoatOptions, request: &RouteRequest) -> Result<BoatStatus> {
         let wind_provider = self.wind_providers.get(wind_provider)?;
         let polar = self.polars.get(&polar_id)?;
-        let lands_provider = Arc::new(VrLandProvider::new()?);
+        let lands_provider = self.land_providers.get("vr".to_string())?;
 
         let instant_wind = wind_provider.find(&request.start_time);
         let wind = instant_wind.interpolate(&request.from);
