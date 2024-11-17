@@ -122,7 +122,7 @@ pub async fn navigate(wind_provider: String, polar_id: String, race: Race, boat_
 
 #[wasm_bindgen]
 pub async fn status(wind_provider: String, polar_id: String, boat_options: BoatOptions, request: RouteRequest) -> Result<BoatStatus, JsValue> {
-    match PHTHEIRICHTHYS.read().unwrap().status(wind_provider, polar_id, &boat_options, &request) {
+    match PHTHEIRICHTHYS.read().unwrap().status(wind_provider, polar_id, &boat_options, &request, |_| false) {
         Ok(result) => Ok(result),
         Err(e) => Err(js_sys::Error::new(&e.to_string()))?,
     }

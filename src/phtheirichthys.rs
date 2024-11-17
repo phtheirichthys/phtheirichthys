@@ -95,7 +95,7 @@ impl Phtheirichthys {
     }
 
     pub(crate) fn eval_snake(&self, route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<Snake> {
-        let status = self.status(params.wind_provider.clone(), params.polar.clone(), &params.boat_options, &route_request)?;
+        let status = self.status(params.wind_provider.clone(), params.polar.clone(), &params.boat_options, &route_request, |_| { false })?;
 
         Ok(Snake {
             heading: self.eval_snake_heading(&route_request, &params, &heading, &status, |_, twd| Heading::TWA(heading.twa(twd)))?,
@@ -291,7 +291,11 @@ impl Phtheirichthys {
     }
     
     pub async fn navigate(&self, wind_provider: String, polar_id: String, race: Race, boat_options: BoatOptions, request: RouteRequest) -> Result<RouteResult> {
-        let boat_status = self.status(wind_provider.clone(), polar_id.clone(), &boat_options, &request)?;
+        // TODO : gérer plutot par déserialisation...
+        let mut race = race;
+        race.restricted_zones.iter_mut().for_each(|zone| zone.compute());
+
+        let boat_status = self.status(wind_provider.clone(), polar_id.clone(), &boat_options, &request, |point| race.is_in_ice_limits_or_restricted_zone(&request.from))?;
 
         let wind_provider = self.wind_providers.get(wind_provider)?;
         let polar = self.polars.get(&polar_id)?;
@@ -316,7 +320,7 @@ impl Phtheirichthys {
 
     }
 
-    pub fn status(&self, wind_provider: String, polar_id: String, boat_options: &BoatOptions, request: &RouteRequest) -> Result<BoatStatus> {
+    pub fn status<F: Fn(&Coords) -> bool>(&self, wind_provider: String, polar_id: String, boat_options: &BoatOptions, request: &RouteRequest, is_in_ice_limits_or_restricted_zone: F) -> Result<BoatStatus> {
         let wind_provider = self.wind_providers.get(wind_provider)?;
         let polar = self.polars.get(&polar_id)?;
         let lands_provider = self.land_providers.get("vr".to_string())?;
@@ -324,7 +328,7 @@ impl Phtheirichthys {
         let instant_wind = wind_provider.find(&request.start_time);
         let wind = instant_wind.interpolate(&request.from);
 
-        let is_in_ice_limits = false; //TODO : gérer la glace
+        let is_in_ice_limits = is_in_ice_limits_or_restricted_zone(&request.from);
         let polar_result = polar.get_boat_speed(&request.boat_settings.heading, &wind, Some(&request.boat_settings.sail), &request.boat_settings.sail, is_in_ice_limits);
 
         let vmgs = polar.get_vmg(&wind.speed, Some(&request.boat_settings.sail), is_in_ice_limits);
@@ -340,6 +344,7 @@ impl Phtheirichthys {
             vmgs: Some(vmgs),
             penalties: Penalties::new(),
             stamina: 100.0,
+            ice: is_in_ice_limits_or_restricted_zone(&request.from),
         })
     }
 

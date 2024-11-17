@@ -101,11 +101,10 @@ impl RestrictedZone {
         }
 
         if point.lat < self.bbox[0] || point.lat > self.bbox[2] || lon < self.bbox[1] || lon > self.bbox[2] {
-            debug!("Not in bbox");
             return false;
         }
 
-        self.to_avoids.as_ref().unwrap().contains(&Point::new(point.lon, point.lat))
+        self.to_avoids.as_ref().unwrap().contains(&Point::new(lon, point.lat))
     }
 }
 
@@ -254,5 +253,20 @@ impl Race {
 
         info!("Validate next waypoint");
         self.buoys.iter_mut().filter(|w| !w.is_validated()).collect::<Vec<&mut Buoy>>().first_mut().map(|w| w.validate());
+    }
+
+    pub(crate) fn is_in_ice_limits_or_restricted_zone(&self, point: &Coords) -> bool {
+        match self.ice_limits.as_ref() {
+            Some(limits) => if limits.is_in(point) {
+                return true
+            }
+            _ => {}
+        }
+
+        for zone in self.restricted_zones.iter() {
+            if zone.is_in(point) { return true }
+        }
+
+        false
     }
 }

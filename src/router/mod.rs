@@ -134,6 +134,7 @@ impl Into<BoatStatus> for WaypointStatus {
       vmgs: None,
       penalties: Penalties::default(),
       stamina: 0.0,
+      ice: self.ice,
     }
   }
 }

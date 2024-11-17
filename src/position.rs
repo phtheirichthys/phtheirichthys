@@ -122,6 +122,7 @@ pub struct BoatStatus {
     pub vmgs: Option<Vmgs>,
     pub penalties: Penalties,
     pub stamina: f64,
+    pub ice: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Tsify)]

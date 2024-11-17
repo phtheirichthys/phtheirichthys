@@ -48,10 +48,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
         let start_routing = Utc::now();
 
         debug!("Route asked : {:?}", request);
-
-        let mut race = race;
-        race.restricted_zones.iter_mut().for_each(|zone| zone.compute());
-
+        
         let race = Arc::new(race);
 
         info!("Route asked on race : {:?}", race);
@@ -449,6 +446,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
                     vmgs: None,
                     penalties,
                     stamina,
+                    ice: is_in_ice_limits,
                 },
                 previous: Some(from.clone()),
                 is_in_ice_limits,
@@ -457,22 +455,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
             }))
         }).filter(|alt| alt.is_some()).map(|alt| alt.unwrap()).collect()
     }
-
-    fn is_in_ice_limits_or_restricted_zone(race: &Race, point: &Coords) -> bool {
-        match &race.ice_limits {
-            Some(limits) => if limits.is_in(point) {
-                return true
-            }
-            _ => {}
-        }
-
-        for zone in race.restricted_zones.iter() {
-            if zone.is_in(point) { return true }
-        }
-
-        false
-    }
-
+    
     fn buoy_reached(algorithm: &Arc<A>, polar: &mut PolarCache, boat_options: &Arc<BoatOptions>, start: &Arc<Coords>, from: &Arc<Position>, to: &Arc<Buoy>, duration: Duration, wind: &Wind, factor: f64) -> Option<(i32, Position)> {
 
         if from.dist_to > from.distance.clone() * 10.0 {
@@ -530,6 +513,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
                         vmgs: None,
                         penalties,
                         stamina,
+                        ice: false,
                     },
                     previous: Some(from.clone()),
                     is_in_ice_limits: false,
@@ -588,7 +572,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         // } else {
             for twa in -180..180 {
                 let heading = Heading::TWA(twa as f64);
-                let positions = Self::jump2(&algorithm, Some(&lands_provider), polar, &boat_options, &start, &from, to, &heading, duration, wind, factor, false, |point| Self::is_in_ice_limits_or_restricted_zone(race, &point));
+                let positions = Self::jump2(&algorithm, Some(&lands_provider), polar, &boat_options, &start, &from, to, &heading, duration, wind, factor, false, |point| race.is_in_ice_limits_or_restricted_zone(&point));
 
                 for (az, pos) in positions {
                     let nav = if pos.duration.relative == duration { &mut default_nav } else { navs.entry(pos.duration.absolute).or_insert_with(|| Nav::from(pos.duration.absolute)) };
