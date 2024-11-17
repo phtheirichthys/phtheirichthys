@@ -3,7 +3,9 @@ use std::sync::{Arc, RwLock};
 
 use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
-use log::{info};
+use geo::Contains;
+use geo_types::{coord, Point, LineString, Polygon};
+use log::{debug, info};
 use serde::{Serialize, Deserialize};
 use tsify_next::Tsify;
 use crate::algorithm::Algorithm;
@@ -76,21 +78,18 @@ pub struct Race {
 #[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct RestrictedZone {
-    name: String,
+    pub(crate) name: String,
     color: Option<String>,
     vertices: Vec<Coords>,
     bbox: [f64; 4],
-    #[serde(default)]
-    to_avoids: Vec<(Coords, Coords, Coords)>
+    #[serde(skip)]
+    to_avoids: Option<Polygon>,
 }
 
 impl RestrictedZone {
     pub(crate) fn compute(&mut self) {
-        let mut vertices = self.vertices.clone();
-        while vertices.len() > 2 {
-            self.to_avoids.push((vertices[0].clone(), vertices[1].clone(), vertices[2].clone()));
-            vertices.remove(1);
-        }
+        let pts = self.vertices.iter().map(|v| (v.lon, v.lat)).collect::<Vec<_>>();
+        self.to_avoids = Some(Polygon::new(LineString::from(pts), vec![]));
     }
     pub(crate) fn is_in(&self, point: &Coords) -> bool {
         let mut lon = point.lon;
@@ -102,27 +101,11 @@ impl RestrictedZone {
         }
 
         if point.lat < self.bbox[0] || point.lat > self.bbox[2] || lon < self.bbox[1] || lon > self.bbox[2] {
+            debug!("Not in bbox");
             return false;
         }
 
-        for t in self.to_avoids.iter() {
-            let as_x = point.lat - t.0.lat;
-            let as_y = point.lon - t.0.lon;
-
-            let s_ab = (t.1.lat-t.0.lat)*as_y-(t.1.lon-t.0.lon)*as_x > 0.0;
-
-            if ((t.2.lat-t.0.lat)*as_y-(t.2.lon-t.0.lon)*as_x > 0.0) == s_ab {
-                continue
-            }
-
-            if ((t.2.lat-t.1.lat)*(point.lon-t.1.lon)-(t.2.lon-t.1.lon)*(point.lat-t.1.lat) > 0.0) != s_ab {
-                continue
-            }
-
-            return true
-        }
-
-        false
+        self.to_avoids.as_ref().unwrap().contains(&Point::new(point.lon, point.lat))
     }
 }
 
@@ -176,6 +159,23 @@ impl Limits {
 
         false
     }
+}
+
+fn sign(p1: &Coords, p2: &Coords, p3: &Coords) -> f64
+{
+    (p1.lon - p3.lon) * (p2.lat - p3.lat) - (p2.lon - p3.lon) * (p1.lat - p3.lat)
+}
+
+fn point_in_triangle(pt: &Coords, v1: &Coords, v2: &Coords, v3: &Coords) -> bool
+{
+    let d1 = sign(pt, v1, v2);
+    let d2 = sign(pt, v2, v3);
+    let d3 = sign(pt, v3, v1);
+
+    let has_neg = (d1 < 0.0) || (d2 < 0.0) || (d3 < 0.0);
+    let has_pos = (d1 > 0.0) || (d2 > 0.0) || (d3 > 0.0);
+
+    !(has_neg && has_pos)
 }
 
 #[derive(Clone, Deserialize, Serialize, Debug, Tsify)]
