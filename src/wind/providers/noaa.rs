@@ -174,7 +174,8 @@ impl NoaaWindProvider {
                 let refs = vec![
                     0, 3, 6, 9, 12,
                     24, 36, 48,
-                    72, 96, 120, 144, 168
+                    72, 96, 120, 144, 168,
+                    192, 216, 240, 264, 288, 312, 336
                 ];
 
                 // Filter forecasts to keep only every 3h for 12h, then every 12h for 48h, then every 24h for 7 days
