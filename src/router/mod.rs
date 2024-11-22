@@ -12,6 +12,7 @@ use crate::phtheirichthys::BoatOptions;
 use crate::position::{Heading, Penalties, Coords, BoatSettings, BoatStatus};
 use crate::wind::Wind;
 use crate::{position, race::Race};
+use crate::polar::Vmgs;
 use crate::utils::Speed;
 
 // pub(crate) mod phtheirichthys;
@@ -116,6 +117,7 @@ pub(crate) struct WaypointStatus {
   pub(crate) best_ratio: f64,
   pub(crate) ice: bool,
   pub(crate) change: bool,
+  pub(crate) vmgs: Option<Vmgs>,
   pub(crate) penalties: Vec<Penalty>,
   pub(crate) remaining_penalties: Vec<Penalty>,
   pub(crate) stamina: f64,
