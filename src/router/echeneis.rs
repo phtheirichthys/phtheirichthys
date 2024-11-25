@@ -436,6 +436,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
                 settings: BoatSettings {
                     heading: heading.clone(),
                     sail: polar_result.sail,
+                    stamina: from.remaining_stamina,
                 },
                 status: BoatStatus {
                     aground: false,
@@ -504,6 +505,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
                     settings: BoatSettings {
                         heading: heading.clone(),
                         sail: polar_result.sail,
+                        stamina: from.remaining_stamina,
                     },
                     status: BoatStatus {
                         aground: false,
@@ -1260,7 +1262,7 @@ impl From<(RouteRequest, BoatStatus)> for Position {
             previous: None,
             is_in_ice_limits: false,
             remaining_penalties: boat_status.penalties.clone(),
-            remaining_stamina: boat_status.stamina,
+            remaining_stamina: route_request.boat_settings.stamina,
         }
     }
 }

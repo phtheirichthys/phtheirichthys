@@ -49,6 +49,7 @@ impl Display for Coords {
 pub(crate) struct BoatSettings {
     pub(crate) heading: Heading,
     pub(crate) sail: Sail,
+    pub(crate) stamina: f64,
 }
 
 impl PartialEq<BoatSettings> for BoatSettings {

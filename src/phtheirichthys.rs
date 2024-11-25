@@ -128,7 +128,7 @@ impl Phtheirichthys {
             previous: None,
             is_in_ice_limits: false,
             remaining_penalties: boat_status.penalties.clone(),
-            remaining_stamina: boat_status.stamina,
+            remaining_stamina: route_request.boat_settings.stamina,
         };
         let mut positions = vec![(src.clone(), false)];
 
@@ -345,7 +345,7 @@ impl Phtheirichthys {
             ratio: 100,
             vmgs: Some(vmgs),
             penalties: Penalties::new(),
-            stamina: 100.0,
+            stamina: request.boat_settings.stamina, //TODO : should be evaluated
             ice: is_in_ice_limits_or_restricted_zone(&request.from),
         })
     }

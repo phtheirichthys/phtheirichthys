@@ -462,13 +462,13 @@ impl Polar {
         };
 
         let stamina_coef = if wind_speed.kts() <= 10.0 {
-            1.0 + wind_speed.kts() / 10.0 * 0.25
+            amount + wind_speed.kts() / 10.0 * 0.25
         } else if wind_speed.kts() <= 20.0 {
-            1.25 + (wind_speed.kts() - 10.0) / 10.0 * 0.25
+            amount + (wind_speed.kts() - 10.0) / 10.0 * 0.25
         } else if wind_speed.kts() <= 30.0 {
-            1.5 + (wind_speed.kts() - 20.0) / 10.0 * 0.5
+            amount + (wind_speed.kts() - 20.0) / 10.0 * 0.5
         } else {
-            2.0
+            amount
         };
 
         if previous_twa * new_twa < 0.0 && new_twa.abs() <= 90.0 {
