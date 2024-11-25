@@ -79,12 +79,12 @@ impl PolarCache {
         self.polar.add_penalties(boat_options, penalties, stamina, previous_twa, new_twa, previous_sail, new_sail, wind_speed)
     }
 
-    pub(crate) fn tired(&self, stamina: f64, previous_twa: f64, new_twa: f64, previous_sail: &position::Sail, new_sail: &position::Sail, wind_speed: &Speed) -> f64 {
-        self.polar.tired(stamina, previous_twa, new_twa, previous_sail, new_sail, wind_speed)
+    pub(crate) fn tired(&self, boat_options: &Arc<BoatOptions>, stamina: f64, previous_twa: f64, new_twa: f64, previous_sail: &position::Sail, new_sail: &position::Sail, wind_speed: &Speed) -> f64 {
+        self.polar.tired(boat_options, stamina, previous_twa, new_twa, previous_sail, new_sail, wind_speed)
     }
 
-    pub(crate) fn recovers(&self, stamina: f64, duration: &Duration, wind_speed: &Speed) -> f64 {
-        self.polar.recovers(stamina, duration, wind_speed)
+    pub(crate) fn recovers(&self, boat_options: &Arc<BoatOptions>, stamina: f64, duration: &Duration, wind_speed: &Speed) -> f64 {
+        self.polar.recovers(boat_options, stamina, duration, wind_speed)
     }
 
     fn twa_interpolation_index(&mut self, twa: f64) -> (usize, usize, f64) {
@@ -384,7 +384,7 @@ impl Polar {
         1.0 + (self.foil.speed_ratio - 1.0) * ct * cv
     }
 
-    fn get_penalty_values(&self, boat_options: &Arc<BoatOptions>, penalty_case: &PenaltyCase, wind_speed: &Speed, stamina: f64) -> Penalty {
+    fn get_penalty_values(&self, boat_options: &Arc<BoatOptions>, action: Action, penalty_case: &PenaltyCase, wind_speed: &Speed, stamina: f64) -> Penalty {
 
         let stamina_coef = match boat_options.stamina {
             false => 1.0,
@@ -392,6 +392,15 @@ impl Polar {
                 0.5 + (100.0 - stamina) / 100.0 * 1.5
             }
         };
+
+        let mut coef = stamina_coef;
+        match action {
+            Action::SAIL_CHANGE => if boat_options.magic_furler {
+                coef *= 0.8
+            }
+            _ => {}
+        }
+
 
         let (lws, hws, bnd) = match (boat_options.winch, self.winch.lws, self.winch.hws, &penalty_case.std, &penalty_case.pro) {
             (true,  Some(lws), Some(hws), _, Some(pro)) => {
@@ -401,21 +410,21 @@ impl Polar {
                 (lws as f64, hws as f64, std)
             }
             (true, _, _, _, _) => {
-                return Penalty { duration: Duration::seconds((penalty_case.pro_timer_sec as f64 * stamina_coef) as i64), ratio: penalty_case.pro_ratio }
+                return Penalty { duration: Duration::seconds((penalty_case.pro_timer_sec as f64 * coef) as i64), ratio: penalty_case.pro_ratio }
             }
             (false, _, _, _, _) => {
-                return Penalty { duration: Duration::seconds((penalty_case.std_timer_sec as f64 * stamina_coef) as i64), ratio: penalty_case.std_ratio }
+                return Penalty { duration: Duration::seconds((penalty_case.std_timer_sec as f64 * coef) as i64), ratio: penalty_case.std_ratio }
             }
         };
 
         if wind_speed.kts() <= lws {
-            Penalty { duration: Duration::seconds((bnd.lw.timer as f64 * stamina_coef) as i64), ratio: bnd.lw.ratio }
+            Penalty { duration: Duration::seconds((bnd.lw.timer as f64 * coef) as i64), ratio: bnd.lw.ratio }
         } else if wind_speed.kts() >= hws {
-            Penalty { duration: Duration::seconds((bnd.hw.timer as f64 * stamina_coef) as i64), ratio: bnd.hw.ratio }
+            Penalty { duration: Duration::seconds((bnd.hw.timer as f64 * coef) as i64), ratio: bnd.hw.ratio }
         } else {
             let duration_seconds = Self::interpolation(lws, hws, bnd.lw.timer as f64, bnd.hw.timer as f64, wind_speed.kts());
             let ratio = Self::interpolation(lws, hws, bnd.lw.ratio, bnd.hw.ratio, wind_speed.kts());
-            Penalty { duration: Duration::seconds((duration_seconds * stamina_coef) as i64), ratio }
+            Penalty { duration: Duration::seconds((duration_seconds * coef) as i64), ratio }
         }
     }
 
@@ -424,8 +433,33 @@ impl Polar {
         (1.0 - t) * ((1.0 - t) * ((1.0 - t) * y1 + t * y1) + t * ((1.0 - t) * y1 + t * y2)) + t * ((1.0 - t) * ((1.0 - t) * y1 + t * y2) + t * ((1.0 - t) * y2 + t * y2))
     }
 
-    pub(crate) fn tired(&self, stamina: f64, previous_twa: f64, new_twa: f64, previous_sail: &position::Sail, new_sail: &position::Sail, wind_speed: &Speed) -> f64 {
+    pub(crate) fn tired(&self, boat_options: &Arc<BoatOptions>, stamina: f64, previous_twa: f64, new_twa: f64, previous_sail: &position::Sail, new_sail: &position::Sail, wind_speed: &Speed) -> f64 {
         let mut stamina = stamina;
+
+        let amount = match boat_options.veste {
+            false => {
+                if wind_speed.kts() <= 10.0 {
+                    1.0
+                } else if wind_speed.kts() <= 20.0 {
+                    1.25
+                } else if wind_speed.kts() <= 30.0 {
+                    1.5
+                } else {
+                    2.0
+                }
+            }
+            true => {
+                if wind_speed.kts() <= 10.0 {
+                    1.0
+                } else if wind_speed.kts() <= 20.0 {
+                    1.0
+                } else if wind_speed.kts() <= 30.0 {
+                    1.25
+                } else {
+                    1.8
+                }
+            } 
+        };
 
         let stamina_coef = if wind_speed.kts() <= 10.0 {
             1.0 + wind_speed.kts() / 10.0 * 0.25
@@ -444,7 +478,7 @@ impl Polar {
         }
 
         if previous_sail != new_sail {
-            stamina = stamina - 20.0 * stamina_coef;
+            stamina = stamina - 20.0 * stamina_coef * (if boat_options.magic_furler { 0.8 } else { 1.0 })
         }
 
         stamina = stamina.max(0.0);
@@ -452,16 +486,19 @@ impl Polar {
         stamina
     }
 
-    pub(crate) fn recovers(&self, stamina: f64, duration: &Duration, wind_speed: &Speed) -> f64 {
+    pub(crate) fn recovers(&self, boat_options: &Arc<BoatOptions>, stamina: f64, duration: &Duration, wind_speed: &Speed) -> f64 {
         let mut stamina = stamina;
 
-        let recovery_time = if wind_speed.kts() <= 0.0 {
+        let mut recovery_time = if wind_speed.kts() <= 0.0 {
             5.0
         } else if wind_speed.kts() >= 30.0 {
             15.0
         } else {
             Self::interpolation(0.0, 30.0, 5.0, 15.0, wind_speed.kts())
         };
+        if boat_options.pouf {
+            recovery_time *= 0.8
+        }
 
         let recovery = duration.num_minutes() as f64 / recovery_time;
         stamina = stamina + recovery;
@@ -474,13 +511,13 @@ impl Polar {
         let mut penalties = penalties;
 
         if previous_twa * new_twa < 0.0 && new_twa.abs() <= 90.0 {
-            penalties.tack = Some(self.get_penalty_values(boat_options, &self.winch.tack, wind_speed, stamina));
+            penalties.tack = Some(self.get_penalty_values(boat_options, Action::TACK, &self.winch.tack, wind_speed, stamina));
         } else if previous_twa * new_twa < 0.0 && new_twa.abs() > 90.0 {
-            penalties.gybe = Some(self.get_penalty_values(boat_options, &self.winch.gybe, wind_speed, stamina));
+            penalties.gybe = Some(self.get_penalty_values(boat_options, Action::GYBE, &self.winch.gybe, wind_speed, stamina));
         }
 
         if previous_sail != new_sail {
-            penalties.sail_change = Some(self.get_penalty_values(boat_options, &self.winch.sail_change, wind_speed, stamina));
+            penalties.sail_change = Some(self.get_penalty_values(boat_options, Action::SAIL_CHANGE, &self.winch.sail_change, wind_speed, stamina));
         }
 
         penalties
@@ -642,4 +679,10 @@ pub(crate) struct PolarSail {
     pub(crate) id: usize,
     pub(crate) name: String,
     pub(crate) speed: Vec<Vec<f64>>
+}
+
+enum Action {
+    TACK,
+    GYBE,
+    SAIL_CHANGE
 }

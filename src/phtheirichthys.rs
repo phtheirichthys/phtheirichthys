@@ -371,10 +371,13 @@ pub struct BoatOptions {
     pub hull: bool,
     pub winch: bool,
     pub stamina: bool,
+    pub magic_furler: bool,
+    pub pouf: bool,
+    pub veste: bool,
 }
 
 impl BoatOptions {
     pub fn new() -> Self {
-        Self { lt: false, gt: false, code0: false, foil: false, hull: false, winch: false, stamina: false }
+        Self { lt: false, gt: false, code0: false, foil: false, hull: false, winch: false, stamina: false, magic_furler: false, pouf: false, veste: false }
     }
 }

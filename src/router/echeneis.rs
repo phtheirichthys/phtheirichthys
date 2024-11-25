@@ -406,11 +406,11 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
 
             let (distance, remaining_penalties, boat_speed, ratio) = Polar::distance(polar_result.speed, jump_duration, &penalties);
 
-            let stamina = polar.tired(from.remaining_stamina, from.settings.heading.twa(from.status.wind.direction), twa,
+            let stamina = polar.tired(boat_options, from.remaining_stamina, from.settings.heading.twa(from.status.wind.direction), twa,
                                       &from.settings.sail, &polar_result.sail,
                                       &wind.speed);
 
-            let remaining_stamina = polar.recovers(stamina, &jump_duration, &wind.speed);
+            let remaining_stamina = polar.recovers(boat_options, stamina, &jump_duration, &wind.speed);
 
             let point = algorithm.destination(&from.point, heading.heading(wind.direction), &distance);
 
@@ -479,13 +479,14 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
 
             let (duration_to_buoy, remaining_penalties, boat_speed, ratio) = Polar::duration(polar_result.speed, distance.clone(), penalties.clone());
 
-            let stamina = polar.tired(from.remaining_stamina,
-                                      from.settings.heading.twa(from.status.wind.direction), heading.twa(wind.direction),
-                                      &from.settings.sail, &polar_result.sail,
-                                      &wind.speed
+            let stamina = polar.tired(boat_options, 
+                                            from.remaining_stamina,
+                                            from.settings.heading.twa(from.status.wind.direction), heading.twa(wind.direction),
+                                            &from.settings.sail, &polar_result.sail,
+                                            &wind.speed
             );
 
-            let remaining_stamina = polar.recovers(stamina, &duration_to_buoy, &wind.speed);
+            let remaining_stamina = polar.recovers(boat_options, stamina, &duration_to_buoy, &wind.speed);
 
             if duration_to_buoy.num_seconds() as f64 <= duration.num_seconds() as f64 * 1.5 {
 
