@@ -371,8 +371,11 @@ pub struct BoatOptions {
     pub hull: bool,
     pub winch: bool,
     pub stamina: bool,
+    #[serde(default)]
     pub magic_furler: bool,
+    #[serde(default)]
     pub pouf: bool,
+    #[serde(default)]
     pub veste: bool,
 }
 
