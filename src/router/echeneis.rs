@@ -112,7 +112,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
             while !reached && success && duration < max_duration && !routing_timeout.is_some_and(|timeout| Utc::now() > start_routing.add(timeout.clone())) {
 
-                let (_, step) = steps.iter().filter(|(d, _)| d > &duration).next().unwrap_or(steps.last().unwrap());
+                let step = steps.iter().filter(|(s)| s.until > duration).next().unwrap_or(steps.last().unwrap()).step;
 
                 // prepare
 

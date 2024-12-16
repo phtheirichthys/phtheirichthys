@@ -282,6 +282,7 @@ impl Sub<Duration> for Penalties {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub(crate) struct Penalty {
     #[serde(serialize_with = "duration_to_seconds", deserialize_with = "seconds_to_duration")]
+    #[tsify(type = "number")]
     pub(crate) duration: Duration,
     pub(crate) ratio: f64,
 }

@@ -145,7 +145,7 @@ impl Phtheirichthys {
                 &start,
                 &from,
                 &None,
-                &twa, Duration::hours(1), &wind, 1.0, true,
+                &twa, delta, &wind, 1.0, true,
                 |_| false
             );
 

@@ -1,6 +1,6 @@
 [package]
 name = "phtheirichthys"
-version = "0.1.77"
+version = "0.1.78"
 authors = ["Arnaud Bouts <arnaud.bouts@orange.com>"]
 edition = "2018"
 

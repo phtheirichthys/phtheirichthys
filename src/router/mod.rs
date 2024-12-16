@@ -31,16 +31,27 @@ pub struct RouteRequest {
   pub start_time: DateTime<Utc>,
   pub boat_settings: BoatSettings,
   //pub status: BoatStatus,
-  #[serde(skip, default = "default_steps")]
-  pub steps: Vec<(Duration, Duration)>,
+  pub steps: Vec<Step>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct Step {
+  #[serde(serialize_with = "duration_to_seconds", deserialize_with = "seconds_to_duration")]
+  #[tsify(type = "number")]
+  until: Duration,
+  #[serde(serialize_with = "duration_to_seconds", deserialize_with = "seconds_to_duration")]
+  #[tsify(type = "number")]
+  step: Duration
+}
+
 
 fn default_steps() -> Vec<(Duration, Duration)> {
   vec![
-    (Duration::hours(4),    Duration::minutes(10)),
-    (Duration::hours(6),    Duration::minutes(30)),
-    (Duration::hours(12),    Duration::hours(1)),
-    (Duration::hours(24),   Duration::hours(3)),
+    // (Duration::hours(4),    Duration::minutes(10)),
+    // (Duration::hours(12),    Duration::minutes(30)),
+    (Duration::hours(6 * 24),    Duration::hours(1)),
+    // (Duration::hours(48),   Duration::hours(3)),
     (Duration::hours(9999), Duration::hours(6)),
   ]
 }
