@@ -7,7 +7,7 @@ use cubecl::prelude::*;
 // use gloo::timers::callback::Timeout;
 use log::{error, info, debug};
 use serde::{Deserialize, Serialize};
-use tsify_next::Tsify;
+use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 
 use crate::{algorithm, land, wind};

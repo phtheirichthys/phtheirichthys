@@ -4,7 +4,7 @@ use std::ops::Sub;
 use chrono::Duration;
 use serde::{Serialize, Deserialize, Serializer, de, Deserializer};
 use serde::de::Visitor;
-use tsify_next::Tsify;
+use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 use crate::polar::Vmgs;
 use crate::router;

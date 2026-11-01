@@ -4,7 +4,7 @@ use log::{debug, error, info};
 
 use crate::{phtheirichthys::{BoatOptions, Phtheirichthys, SnakeParams}, position::{BoatSettings, Heading, Sail}, race::Race, wind};
 use crate::position::{BoatStatus, Coords};
-use crate::router::RouteRequest;
+use crate::router::{RouteRequest, Step};
 use crate::utils::Speed;
 use crate::wind::providers::config::{NoaaProviderConfig, ProviderConfig};
 use crate::wind::Wind;
@@ -85,13 +85,16 @@ async fn echeneis() {
 
 
     let boat_options = BoatOptions {
-        lt: false,
-        gt: false,
-        code0: false,
-        foil: false,
-        hull: false,
-        winch: false,
-        stamina: true,
+        lt:false,
+        gt:false,
+        code0:false,
+        foil:false,
+        hull:false,
+        winch:false,
+        stamina:true,
+        magic_furler: false,
+        pouf: false,
+        veste: false
     };
 
     let request = RouteRequest {
@@ -105,7 +108,7 @@ async fn echeneis() {
             // (Duration::hours(12),   Duration::minutes(30)),
             // (Duration::hours(24),   Duration::hours(1)),
             // (Duration::hours(144),  Duration::hours(3)),
-            (Duration::hours(9999), Duration::hours(6)),
+            Step { until: Duration::hours(9999), step: Duration::hours(6) },
         ],
     };
 
@@ -148,7 +151,7 @@ async fn snake() {
     let request = RouteRequest {
         from: Default::default(),
         start_time: Default::default(),
-        boat_settings: BoatSettings { heading: Heading::HEADING(182.0), sail: Sail { index: 7, id: 6, auto: true } },
+        boat_settings: BoatSettings { heading: Heading::HEADING(182.0), sail: Sail { index: 7, id: 6, auto: true }, stamina: 100.0 },
         steps: vec![
             // (Duration::minutes(30), Duration::minutes(1)),
             // (Duration::hours(1),    Duration::minutes(5)),
@@ -156,7 +159,7 @@ async fn snake() {
             // (Duration::hours(12),   Duration::minutes(30)),
             // (Duration::hours(24),   Duration::hours(1)),
             // (Duration::hours(144),  Duration::hours(3)),
-            (Duration::hours(9999), Duration::hours(6)),
+            Step{ until: Duration::hours(9999), step: Duration::hours(6) },
         ],
     };
 
@@ -169,6 +172,9 @@ async fn snake() {
             hull: true,
             winch: true,
             stamina: true,
+            magic_furler: true,
+            pouf: true,
+            veste: true
         };
 
         let params = SnakeParams {
@@ -182,6 +188,6 @@ async fn snake() {
         match phtheirichthys.eval_snake(request.clone(), params, Heading::HEADING(a as f64)) {
             Ok(_) => debug!("Ok"),
             Err(err) => error!("Snaking error : {}", err)
-        }    
+        }
     }
 }

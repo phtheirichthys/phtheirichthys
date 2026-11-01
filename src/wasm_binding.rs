@@ -4,7 +4,7 @@ use chrono::{TimeZone, Utc};
 use log::{debug, error, Level};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use tsify_next::{declare, Tsify};
+use tsify::{declare, Tsify};
 use wasm_bindgen::Clamped;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, ImageData, OffscreenCanvas};
@@ -21,6 +21,8 @@ static PHTHEIRICHTHYS: Lazy<std::sync::RwLock<Phtheirichthys>> = Lazy::new(|| {
 
 #[wasm_bindgen(start)]
 fn run() {
+    #[cfg(feature = "console_error_panic_hook")]
+    console_error_panic_hook::set_once();
     let _ = console_log::init_with_level(Level::Debug);
 }
 

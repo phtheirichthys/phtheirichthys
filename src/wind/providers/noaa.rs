@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use tokio::task::spawn_local;
 use bytes::{Buf, Bytes};
 use bytes::buf::Reader;
-use grib::{Grib2, GribError, GridDefinitionTemplateValues, SeekableGrib2Reader};
+use grib::{Grib2, GribError, GridDefinitionTemplateValues, SeekableGrib2Reader, LatLons};
 use grib::codetables::Lookup;
 use crate::wind::ProviderStatus;
 use crate::{position::Coords, utils::Speed, wind::{vector_to_degrees, InstantWind, Provider, Wind}};
@@ -468,13 +468,14 @@ impl Reference {
 
             match GridDefinitionTemplateValues::try_from(submessage.grid_def())? {
                 GridDefinitionTemplateValues::Template0(def) => {
-                    let mut data = vec![vec![0f32; def.nj as usize + 1]; def.ni as usize];
+                    let grid = def.lat_lon.grid;
+                    let mut data = vec![vec![0f32; grid.nj as usize + 1]; grid.ni as usize];
 
-                    delta_lat = ((def.last_point_lat - def.first_point_lat).abs() / (def.nj - 1) as i32) as f64 / factor;
-                    delta_lon= ((def.last_point_lon - def.first_point_lon).abs() / (def.ni - 1) as i32) as f64 / factor;
+                    delta_lat = ((grid.last_point_lat - grid.first_point_lat).abs() / (grid.nj - 1) as i32) as f64 / factor;
+                    delta_lon= ((grid.last_point_lon as i32 - grid.first_point_lon as i32).abs() / (grid.ni - 1) as i32) as f64 / factor;
 
-                    first_point_lat = def.first_point_lat as f64 / factor;
-                    first_point_lon = def.first_point_lon as f64 / factor;
+                    first_point_lat = grid.first_point_lat as f64 / factor;
+                    first_point_lon = grid.first_point_lon as f64 / factor;
 
                     let latlons = submessage.latlons()?;
                     let decoder = grib::Grib2SubmessageDecoder::from(submessage)?;

@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use chrono_humanize::HumanTime;
 use serde::{Serialize, Serializer, Deserialize};
-use tsify_next::Tsify;
+use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 use crate::phtheirichthys::BoatOptions;
 use crate::position::{Heading, Penalties, Coords, BoatSettings, BoatStatus};
@@ -39,10 +39,10 @@ pub struct RouteRequest {
 pub struct Step {
   #[serde(serialize_with = "duration_to_seconds", deserialize_with = "seconds_to_duration")]
   #[tsify(type = "number")]
-  until: Duration,
+  pub until: Duration,
   #[serde(serialize_with = "duration_to_seconds", deserialize_with = "seconds_to_duration")]
   #[tsify(type = "number")]
-  step: Duration
+  pub step: Duration
 }
 
 

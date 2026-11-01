@@ -7,7 +7,7 @@ use geo::Contains;
 use geo_types::{coord, Point, LineString, Polygon};
 use log::{debug, info};
 use serde::{Serialize, Deserialize};
-use tsify_next::Tsify;
+use tsify::Tsify;
 use crate::algorithm::Algorithm;
 use crate::algorithm::spherical::Spherical;
 use crate::position::Coords;

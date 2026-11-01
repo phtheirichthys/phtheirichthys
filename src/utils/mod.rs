@@ -5,7 +5,7 @@ use std::f64::consts::PI;
 use chrono::Duration;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Visitor;
-use tsify_next::Tsify;
+use tsify::Tsify;
 
 #[derive(Clone, Debug, Default, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]

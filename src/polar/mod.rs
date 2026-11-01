@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use anyhow::{bail, Result};
 use chrono::Duration;
 use serde::{Serialize, Deserialize};
-use tsify_next::Tsify;
+use tsify::Tsify;
 use crate::phtheirichthys::BoatOptions;
 use crate::position;
 use crate::position::{Heading, Penalties, Penalty};
@@ -458,7 +458,7 @@ impl Polar {
                 } else {
                     1.8
                 }
-            } 
+            }
         };
 
         let stamina_coef = if wind_speed.kts() <= 10.0 {
@@ -567,7 +567,13 @@ impl Polar {
             }
         }
 
-        (distance / boat_speed.clone(), penalties, boat_speed, 1.0)
+        let new_boat_speed = if boat_speed.value == 0.0 {
+            Speed { value: 0.1, unit: SpeedUnit::Knot }
+        } else {
+            boat_speed.clone()
+        };
+
+        (distance / new_boat_speed, penalties, boat_speed, 1.0)
     }
 
 }

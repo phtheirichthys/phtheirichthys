@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, collections::HashMap, fmt::{Display, Formatter}
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
-use tsify_next::Tsify;
+use tsify::Tsify;
 
 use crate::{position::Coords, utils::{self, Speed}};
 
