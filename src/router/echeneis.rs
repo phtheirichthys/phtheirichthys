@@ -779,22 +779,22 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
 
     #[cfg(feature = "rayon")]
     async fn navigate_from_all(from: Nav, to: &mut Buoy, duration: Duration, factor: f64, navs: &Arc<Mutex<HashMap<Duration, Nav>>>, winds: Arc<Box<dyn InstantWind + Send + Sync>>, algorithm: Arc<A>, lands_provider: Arc<Box<dyn LandsProvider + Send + Sync>>, race: Arc<Race>, polar: Arc<Polar>, boat_options: Arc<BoatOptions>, start: Arc<Coords>) {
-        let (send, recv) = tokio::sync::oneshot::channel();
+        // let (send, recv) = tokio::sync::oneshot::channel();
         {
             let navs = navs.clone();
             let winds = winds.clone();
             let to = Arc::new(to.clone());
 
-            rayon::spawn(move || {
+            // rayon::spawn(move || {
                 from.alternatives.par_iter().for_each(|(_, alternative)| {
                     Self::navigate_from_alternative(duration, factor, algorithm.clone(), lands_provider.clone(), race.clone(), polar.clone(), boat_options.clone(), start.clone(), navs.clone(), winds.clone(), to.clone(), alternative);
                 });
 
-                let _ = send.send(());
-            });
+            //     let _ = send.send(());
+            // });
         }
 
-        recv.await.expect("Panic in rayon::spawn");
+        // recv.await.expect("Panic in rayon::spawn");
     }
 
     #[cfg(not(feature = "rayon"))]
