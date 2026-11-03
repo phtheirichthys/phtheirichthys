@@ -48,7 +48,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
         let start_routing = Utc::now();
 
         debug!("Route asked : {:?}", request);
-        
+
         let race = Arc::new(race);
 
         info!("Route asked on race : {:?}", race);
@@ -60,7 +60,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
         let steps = request.steps.clone();
 
         let start = request.start_time;
-        
+
         let mut from = request.from.clone();
         let mut froms = Nav {
             absolute_duration: Duration::zero(),
@@ -101,7 +101,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
 
             best_dist_to = min.clone();
 
-            let factor = self.get_factor(&from, &destination);
+            let factor = self.get_factor(&boat_options, &from, &destination);
 
             self.debug(format!("Route to {} at {}", destination.name(), factor));
 
@@ -223,7 +223,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
                             let previous_factor = factor;
                             let factor = match buoys.peek() {
                                 Some(buoy) => {
-                                    self.get_factor(&destination.departure(), &buoy)
+                                    self.get_factor(&boat_options, &destination.departure(), &buoy)
                                 },
                                 None => factor
                             };
@@ -328,7 +328,7 @@ impl<A: Algorithm + Send + Sync> Router for Echeneis<A> {
                         best_ratio: next.status.best_ratio,
                         ice: next.status.ice,
                         change: false,
-                        vmgs: Some(self.polar.get_vmg(&next.status.wind.speed, Some(&next.settings.sail), next.status.ice)),
+                        vmgs: Some(self.polar.get_vmg(&boat_options, &next.status.wind.speed, Some(&next.settings.sail), next.status.ice)),
                         penalties: next.status.penalties.clone().into(),
                         remaining_penalties: next.remaining_penalties.clone().into(),
                         stamina: next.status.stamina,
@@ -392,13 +392,13 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
             return Vec::new()
         }
 
-        polar.get_boat_speeds(&heading, wind, &from.settings.sail, from.is_in_ice_limits, false).into_iter().map(|polar_result| {
+        polar.get_boat_speeds(boat_options, &heading, wind, &from.settings.sail, from.is_in_ice_limits, false).into_iter().map(|polar_result| {
             let penalties = polar.add_penalties(boat_options, from.remaining_penalties.clone(), from.remaining_stamina,
                                                 from.settings.heading.twa(from.status.wind.direction), twa,
                                                 &from.settings.sail, &polar_result.sail,
                                                 &wind.speed
             );
-            
+
             let mut jump_duration = duration;
             if penalties.duration() > duration {
                 jump_duration = jump_duration * ((penalties.duration().num_minutes() as f64 / jump_duration.num_minutes() as f64).ceil() as i32);
@@ -458,7 +458,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
             }))
         }).filter(|alt| alt.is_some()).map(|alt| alt.unwrap()).collect()
     }
-    
+
     fn buoy_reached(algorithm: &Arc<A>, polar: &mut PolarCache, boat_options: &Arc<BoatOptions>, start: &Arc<Coords>, from: &Arc<Position>, to: &Arc<Buoy>, duration: Duration, wind: &Wind, factor: f64) -> Option<(i32, Position)> {
 
         if from.dist_to > from.distance.clone() * 10.0 {
@@ -471,7 +471,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
 
         let mut results = Vec::new();
 
-        for polar_result in polar.get_boat_speeds(&heading, wind, &from.settings.sail, from.is_in_ice_limits, false).into_iter() {
+        for polar_result in polar.get_boat_speeds(boat_options, &heading, wind, &from.settings.sail, from.is_in_ice_limits, false).into_iter() {
             let penalties = polar.add_penalties(boat_options, from.remaining_penalties.clone(), from.remaining_stamina,
                                                 from.settings.heading.twa(from.status.wind.direction), heading.twa(wind.direction),
                                                 &from.settings.sail, &polar_result.sail,
@@ -480,7 +480,7 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
 
             let (duration_to_buoy, remaining_penalties, boat_speed, ratio) = Polar::duration(polar_result.speed, distance.clone(), penalties.clone());
 
-            let stamina = polar.tired(boat_options, 
+            let stamina = polar.tired(boat_options,
                                             from.remaining_stamina,
                                             from.settings.heading.twa(from.status.wind.direction), heading.twa(wind.direction),
                                             &from.settings.sail, &polar_result.sail,
@@ -868,22 +868,22 @@ impl<A: 'static + Algorithm + Send + Sync> Echeneis<A> {
         });
     }
 
-    fn get_factor(&self, from: &Coords, to: &Buoy) -> f64 {
+    fn get_factor(&self, boat_options: &Arc::<BoatOptions>, from: &Coords, to: &Buoy) -> f64 {
         let dist = to.distance(from);
-        let polar_result = self.polar.get_boat_speed(&Heading::TWA(90.0), &Wind { direction: 0.0 ,speed: Speed::from_kts(10.0) }, Some(&Sail::from_index(0)), &Sail::from_index(0), false);
+        let polar_result = self.polar.get_boat_speed(boat_options, &Heading::TWA(90.0), &Wind { direction: 0.0 ,speed: Speed::from_kts(10.0) }, Some(&Sail::from_index(0)), &Sail::from_index(0), false);
         let dist_between_points = polar_result.speed.km_h() * 3.0 * 1000.0;
-        
+
         self.config.accuracy + ((PI/180.0)/(dist_between_points /dist.m()).clamp(-1.0, 1.0).asin()).round()
     }
 
     fn debug(&self, msg: String) {
       debug!("[{}] {}", self.bot_name, msg);
     }
-    
+
     fn _info(&self, msg: String) {
       info!("[{}] {}", self.bot_name, msg);
     }
-    
+
     fn _error(&self, msg: String) {
       error!("[{}] {}", self.bot_name, msg);
     }

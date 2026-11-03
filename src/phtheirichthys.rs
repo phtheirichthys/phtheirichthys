@@ -95,7 +95,7 @@ impl Phtheirichthys {
     }
 
     pub(crate) fn eval_snake(&self, route_request: RouteRequest, params: SnakeParams, heading: Heading) -> Result<Snake> {
-        let status = self.status(params.wind_provider.clone(), params.polar.clone(), &params.boat_options, &route_request, |_| { false })?;
+        let status = self.status(params.wind_provider.clone(), params.polar.clone(), &Arc::new(params.boat_options.clone()), &route_request, |_| { false })?;
 
         Ok(Snake {
             heading: self.eval_snake_heading(&route_request, &params, &heading, &status, |_, twd| Heading::TWA(heading.twa(twd)))?,
@@ -166,7 +166,7 @@ impl Phtheirichthys {
         positions.reverse();
 
         let mut result = Vec::new();
-        
+
         let mut next = None;
         let mut next_changed = false;
         for (last, changed) in positions.into_iter() {
@@ -291,13 +291,13 @@ impl Phtheirichthys {
 
         Ok(())
     }
-    
+
     pub async fn navigate(&self, wind_provider: String, polar_id: String, race: Race, boat_options: BoatOptions, request: RouteRequest) -> Result<RouteResult> {
         // TODO : gérer plutot par déserialisation...
         let mut race = race;
         race.restricted_zones.iter_mut().for_each(|zone| zone.compute());
 
-        let boat_status = self.status(wind_provider.clone(), polar_id.clone(), &boat_options, &request, |point| race.is_in_ice_limits_or_restricted_zone(&request.from))?;
+        let boat_status = self.status(wind_provider.clone(), polar_id.clone(), &Arc::new(boat_options.clone()), &request, |point| race.is_in_ice_limits_or_restricted_zone(&request.from))?;
 
         let wind_provider = self.wind_providers.get(wind_provider)?;
         let polar = self.polars.get(&polar_id)?;
@@ -308,7 +308,7 @@ impl Phtheirichthys {
         // let timeout = Timeout::new(0, move || {
         //     wasm_bindgen_futures::spawn_local(async move {
                 let router = Echeneis::new("".to_string(), polar, wind_provider, lands_provider.clone(), algorithm, EcheneisConfig { accuracy: 1.0, display_all_isochrones: false, timeout: 60 });
-        
+
                 match router.route(race, boat_options, request, boat_status, None).await {
                     Ok(result) => {
                         Ok(result)
@@ -322,7 +322,7 @@ impl Phtheirichthys {
 
     }
 
-    pub fn status<F: Fn(&Coords) -> bool>(&self, wind_provider: String, polar_id: String, boat_options: &BoatOptions, request: &RouteRequest, is_in_ice_limits_or_restricted_zone: F) -> Result<BoatStatus> {
+    pub fn status<F: Fn(&Coords) -> bool>(&self, wind_provider: String, polar_id: String, boat_options: &Arc<BoatOptions>, request: &RouteRequest, is_in_ice_limits_or_restricted_zone: F) -> Result<BoatStatus> {
         let wind_provider = self.wind_providers.get(wind_provider)?;
         let polar = self.polars.get(&polar_id)?;
         let lands_provider = self.land_providers.get("vr".to_string())?;
@@ -331,9 +331,9 @@ impl Phtheirichthys {
         let wind = instant_wind.interpolate(&request.from);
 
         let is_in_ice_limits = is_in_ice_limits_or_restricted_zone(&request.from);
-        let polar_result = polar.get_boat_speed(&request.boat_settings.heading, &wind, Some(&request.boat_settings.sail), &request.boat_settings.sail, is_in_ice_limits);
+        let polar_result = polar.get_boat_speed(boat_options, &request.boat_settings.heading, &wind, Some(&request.boat_settings.sail), &request.boat_settings.sail, is_in_ice_limits);
 
-        let vmgs = polar.get_vmg(&wind.speed, Some(&request.boat_settings.sail), is_in_ice_limits);
+        let vmgs = polar.get_vmg(boat_options, &wind.speed, Some(&request.boat_settings.sail), is_in_ice_limits);
 
         Ok(BoatStatus {
             aground: lands_provider.is_land(request.from.lat, request.from.lon),

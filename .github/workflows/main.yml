@@ -12,7 +12,7 @@ jobs:
       - name: Land
         run: tar -xzf land.tgz
 
-      - run: wasm-pack build --target web --features "wasm land"
+      - run: wasm-pack build --target web --features "wasm land console_error_panic_hook"
       - run: npm pkg set name=@phtheirichthys/phtheirichthys
         working-directory: pkg
       - run: wasm-pack pack

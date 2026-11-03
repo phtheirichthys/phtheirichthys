@@ -59,7 +59,7 @@ impl PolarCache {
         }
     }
 
-    pub(crate) fn get_boat_speeds(&mut self, heading: &Heading, wind: &Wind, current_sail: &position::Sail, is_in_ice_limits: bool, all: bool) -> Vec<PolarResult> {
+    pub(crate) fn get_boat_speeds(&mut self, boat_options: &Arc<BoatOptions>, heading: &Heading, wind: &Wind, current_sail: &position::Sail, is_in_ice_limits: bool, all: bool) -> Vec<PolarResult> {
 
         let mut twa = heading.twa(wind.direction);
         if twa < 0.0 {
@@ -72,7 +72,7 @@ impl PolarCache {
         let tws_indices = self.tws_interpolation_index(wind.speed.kts());
         let twa_indices = self.twa_interpolation_index(twa);
 
-        self.polar.get_boat_speeds(heading, wind, current_sail, is_in_ice_limits, all, tws_indices, twa_indices)
+        self.polar.get_boat_speeds(boat_options, heading, wind, current_sail, is_in_ice_limits, all, tws_indices, twa_indices)
     }
 
     pub(crate) fn add_penalties(&self, boat_options: &Arc<BoatOptions>, penalties: Penalties, stamina: f64, previous_twa: f64, new_twa: f64, previous_sail: &position::Sail, new_sail: &position::Sail, wind_speed: &Speed) -> Penalties {
@@ -128,7 +128,7 @@ impl Polar {
         (0, 0, 0.0)
     }
 
-    pub(crate) fn get_boat_speeds(&self, heading: &Heading, wind: &Wind, current_sail: &position::Sail, is_in_ice_limits: bool, all: bool, tws_indices: (usize, usize, f64), twa_indices: (usize, usize, f64)) -> Vec<PolarResult> {
+    pub(crate) fn get_boat_speeds(&self, boat_options: &Arc<BoatOptions>, heading: &Heading, wind: &Wind, current_sail: &position::Sail, is_in_ice_limits: bool, all: bool, tws_indices: (usize, usize, f64), twa_indices: (usize, usize, f64)) -> Vec<PolarResult> {
 
         let mut twa = heading.twa(wind.direction);
         if twa < 0.0 {
@@ -140,9 +140,15 @@ impl Polar {
 
         let mut boat_speed_max = Speed::from_kts(0.0);
 
-        // TODO : manage options
         let mut speeds: Vec<(position::Sail, Speed, u8)> = Vec::with_capacity(7);
-        for sail in self.sail.iter() {
+        for sail in self.sail.iter().filter(|s| {
+            match s.name.to_lowercase().as_str() {
+                "staysail" | "lightjib" if !boat_options.lt => false,
+                "heavygnk" | "lightgnk" if !boat_options.gt => false,
+                "code0" if !boat_options.code0 => false,
+                _ => true
+            }
+        } ) {
             let ti0 = &sail.speed[twa_indices.0];
             let ti1 = &sail.speed[twa_indices.1];
 
@@ -155,11 +161,18 @@ impl Polar {
             if is_in_ice_limits {
                 boat_speed *= self.ice_speed_ratio;
             }
-            // TODO : manage hull option
-            boat_speed *= self.hull.speed_ratio;
-            let foil = self.foil_amount(twa, &wind.speed);
-            // TODO : manage foil option
-            boat_speed *= foil;
+
+            if boat_options.hull {
+                boat_speed *= self.hull.speed_ratio;
+            }
+
+            let foil = if boat_options.foil {
+                let foil = self.foil_amount(twa, &wind.speed);
+                boat_speed *= foil;
+                foil
+            } else {
+                1.0
+            };
 
             if boat_speed_max.kts() < boat_speed.kts() {
                 boat_speed_max = boat_speed.clone();
@@ -193,7 +206,7 @@ impl Polar {
         }).filter(|res| res.best >= if all { 0.0 } else { 0.5 }).collect()
     }
 
-    pub(crate) fn get_boat_speed(&self, heading: &Heading, wind: &Wind, using_sail: Option<&position::Sail>, current_sail: &position::Sail, is_in_ice_limits: bool) -> PolarResult {
+    pub(crate) fn get_boat_speed(&self, boat_options: &Arc<BoatOptions>, heading: &Heading, wind: &Wind, using_sail: Option<&position::Sail>, current_sail: &position::Sail, is_in_ice_limits: bool) -> PolarResult {
 
         let using_sail = match using_sail {
             Some(position::Sail { auto: true, .. }) => None,
@@ -215,7 +228,7 @@ impl Polar {
         let tws_indices = Self::interpolation_index(&self.tws, wind.speed.kts());
         let twa_indices = Self::interpolation_index(&self.twa, twa);
 
-        for polar_result in self.get_boat_speeds(heading, wind, current_sail, is_in_ice_limits, true, tws_indices, twa_indices).into_iter() {
+        for polar_result in self.get_boat_speeds(boat_options, heading, wind, current_sail, is_in_ice_limits, true, tws_indices, twa_indices).into_iter() {
             if using_sail.as_ref().is_some_and(|using_sail| {
                 &&polar_result.sail != using_sail
             }) {
@@ -230,18 +243,23 @@ impl Polar {
         best
     }
 
-    fn  get_boat_speed_from_wind_index(&self, wind_speed: &Speed, using_sail: Option<&position::Sail>, is_in_ice_limits: bool, tws_indices: (usize, usize, f64), twa: f64) -> (Speed, position::Sail, f64) {
+    fn  get_boat_speed_from_wind_index(&self, boat_options: &Arc<BoatOptions>, wind_speed: &Speed, using_sail: Option<&position::Sail>, is_in_ice_limits: bool, tws_indices: (usize, usize, f64), twa: f64) -> (Speed, position::Sail, f64) {
         let (twa_index_0, twa_index_1, twa_factor) = Self::interpolation_index(&self.twa, twa);
 
         let mut max_boat_speed: Speed = Default::default();
         let mut best_sail= position::Sail::from_index(0);
 
-        for sail in self.sail.iter() {
+        for sail in self.sail.iter().filter(|s| {
+            match s.name.to_lowercase().as_str() {
+                "staysail" | "lightjib" if !boat_options.lt => false,
+                "heavygnk" | "lightgnk" if !boat_options.gt => false,
+                "code0" if !boat_options.code0 => false,
+                _ => true
+            }
+        } ) {
             if using_sail.is_some_and(|using_sail| sail.id != using_sail.id) {
                 continue;
             }
-
-            // TODO : manage options
 
             let ti0 = &sail.speed[twa_index_0];
             let ti1 = &sail.speed[twa_index_1];
@@ -261,16 +279,23 @@ impl Polar {
         if is_in_ice_limits {
             max_boat_speed *= self.ice_speed_ratio;
         }
-        // TODO : manage hull option
-        max_boat_speed *= self.hull.speed_ratio;
-        let foil = self.foil_amount(twa, wind_speed);
-        // TODO : manage foil option
-        max_boat_speed *= foil;
+
+        if boat_options.hull {
+            max_boat_speed *= self.hull.speed_ratio;
+        }
+
+        let foil = if boat_options.foil {
+            let foil = self.foil_amount(twa, wind_speed);
+            max_boat_speed *= foil;
+            foil
+        } else {
+            1.0
+        };
 
         (max_boat_speed, best_sail, foil)
     }
 
-    pub(crate) fn get_vmg(&self, wind_speed: &Speed, using_sail: Option<&position::Sail>, is_in_ice_limits: bool) -> Vmgs {
+    pub(crate) fn get_vmg(&self, boat_options: &Arc<BoatOptions>, wind_speed: &Speed, using_sail: Option<&position::Sail>, is_in_ice_limits: bool) -> Vmgs {
 
         let mut upwind_vmg = Vmg {
             twa: 0.0,
@@ -289,7 +314,7 @@ impl Polar {
         for twa in 0..1801 {
             let twa = twa as f64 / 10.0;
 
-            let (max_boat_speed, best_sail, _) = self.get_boat_speed_from_wind_index(wind_speed, using_sail, is_in_ice_limits, tws_indices, twa);
+            let (max_boat_speed, best_sail, _) = self.get_boat_speed_from_wind_index(boat_options, wind_speed, using_sail, is_in_ice_limits, tws_indices, twa);
 
             let vmg = Speed::from_kts(max_boat_speed.kts() * (twa.to_radians().cos()));
 
@@ -313,7 +338,7 @@ impl Polar {
         for delta_twa in -10..10 {
             let twa = upwind_vmg_twa.round() - (delta_twa as f64 / 10.0);
 
-            let (boat_speed, sail, _) = self.get_boat_speed_from_wind_index(wind_speed, Some(&upwind_vmg.sail), is_in_ice_limits, tws_indices, twa);
+            let (boat_speed, sail, _) = self.get_boat_speed_from_wind_index(boat_options, wind_speed, Some(&upwind_vmg.sail), is_in_ice_limits, tws_indices, twa);
             let vmg = Speed::from_kts(boat_speed.kts() * (twa.to_radians().cos()));
 
             if vmg.kts() >= upwind_vmg_vmg.kts() - 0.001 && boat_speed > max_boat_speed {
@@ -333,7 +358,7 @@ impl Polar {
         for delta_twa in -10..10 {
             let twa = downwind_vmg_twa.round() + (delta_twa as f64 / 10.0);
 
-            let (boat_speed, sail, _) = self.get_boat_speed_from_wind_index(wind_speed, Some(&downwind_vmg.sail), is_in_ice_limits, tws_indices, twa);
+            let (boat_speed, sail, _) = self.get_boat_speed_from_wind_index(boat_options, wind_speed, Some(&downwind_vmg.sail), is_in_ice_limits, tws_indices, twa);
             let vmg = Speed::from_kts(boat_speed.kts() * (twa.to_radians().cos()));
 
             if vmg.kts() >= downwind_vmg_vmg.kts() - 0.001 && boat_speed > max_boat_speed {
