@@ -112,7 +112,6 @@ impl Phtheirichthys {
 
         let mut now = route_request.start_time;
         let mut duration = Duration::zero();
-        let delta = Duration::hours(1);
         let mut winds = wind_provider.find(&now);
 
         let mut src = Position {
@@ -136,6 +135,9 @@ impl Phtheirichthys {
         let mut twa = Heading::TWA(heading.twa(wind.direction).round());
 
         while duration < Duration::hours(params.max_duration) {
+
+            let delta = route_request.steps.iter().filter(|(s)| s.until > duration).next().unwrap_or(route_request.steps.last().unwrap()).step;
+
             let from: Arc<Position> = Arc::new(src);
             let jump = Echeneis::<_>::jump2(
                 &std::sync::Arc::new(crate::algorithm::spherical::Spherical{}),

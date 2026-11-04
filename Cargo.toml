@@ -1,6 +1,6 @@
 [package]
 name = "phtheirichthys"
-version = "0.1.82"
+version = "0.1.83"
 authors = ["Arnaud Bouts <arnaud.bouts@orange.com>"]
 edition = "2018"
 
@@ -10,6 +10,11 @@ crate-type = ["cdylib", "rlib"]
 [[bin]]
 name = "phtheirichthys"
 path = "src/main.rs"
+
+[[bin]]
+name = "vr_fixture"
+path = "src/bin/vr_fixture.rs"
+required-features = ["tokio"]
 
 [features]
 default = ["console_error_panic_hook"]
